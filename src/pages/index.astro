@@ -1,25 +1,37 @@
 ---
-import '../styles/global.css';
-// Component Imports
-import Button from '../components/Button.astro';
+import BaseLayout from '@/layouts/main.astro';
+import { SimpleFileUpload } from '@/components/ui/simple-file-upload';
 
-// Full Astro Component Syntax:
-// https://docs.astro.build/basics/astro-components/
+const pageTitle = 'Sherlog';
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro + TailwindCSS</title>
-	</head>
-
-	<body>
-		<div class="grid place-items-center h-screen content-center">
-			<Button>Tailwind Button in Astro!</Button>
-			<a href="/markdown-page" class="p-4 underline">Markdown is also supported...</a>
+<BaseLayout title={pageTitle}>
+	<main class="relative flex min-h-screen items-center justify-center px-8 py-16 overflow-hidden">
+		<!-- Radial gradient background -->
+		<div class="absolute inset-0 bg-[#0a0a0a]">
+			<div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(29,78,216,0.15)_0%,_transparent_50%)]"></div>
 		</div>
-	</body>
-</html>
+
+		<!-- Content -->
+		<div class="relative w-full max-w-lg space-y-16">
+			<!-- Header -->
+			<header class="text-center space-y-3">
+				<h1 class="font-sans text-5xl font-semibold text-neutral-50 tracking-tight">Sherlog</h1>
+				<p class="font-sans text-base font-normal text-neutral-400">Elementary, my dear developer</p>
+			</header>
+
+			<!-- Dropzone section -->
+			<div class="space-y-4">
+				<SimpleFileUpload
+					client:load
+					placeholder="Drop your evidence here"
+					maxSizeMB={10}
+					accept={{ 'text/plain': ['.log', '.txt'] }}
+				/>
+
+				<!-- Hint below -->
+				<p class="font-mono text-xs text-center text-neutral-500">.log, .txt • Max 10MB</p>
+			</div>
+		</div>
+	</main>
+</BaseLayout>

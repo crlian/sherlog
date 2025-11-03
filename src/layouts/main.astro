@@ -1,6 +1,11 @@
 ---
 import '../styles/global.css';
-const { content } = Astro.props;
+import '@fontsource-variable/space-grotesk';
+import '@fontsource-variable/inter';
+import '@fontsource/jetbrains-mono/400.css';
+import '@fontsource/jetbrains-mono/500.css';
+
+const { title } = Astro.props;
 ---
 
 <html lang="en">
@@ -8,7 +13,7 @@ const { content } = Astro.props;
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<title>{content.title}</title>
+		<title>{title}</title>
 	</head>
 	<body>
 		<slot />
