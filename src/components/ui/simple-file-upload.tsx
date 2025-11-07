@@ -16,6 +16,7 @@ export type SimpleFileUploadProps = {
   onUpload?: (file: File) => Promise<void>;
   className?: string;
   loadingText?: string;
+  disabled?: boolean;
 };
 
 export function SimpleFileUpload({
@@ -25,6 +26,7 @@ export function SimpleFileUpload({
   onUpload,
   className,
   loadingText = "Analyzing case",
+  disabled = false,
 }: SimpleFileUploadProps) {
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +68,7 @@ export function SimpleFileUpload({
     multiple: false,
     maxSize: maxSizeBytes,
     accept,
+    disabled: disabled || status === "uploading",
   });
 
   return (
@@ -73,11 +76,12 @@ export function SimpleFileUpload({
       <div
         {...getRootProps()}
         className={cn(
-          "group cursor-pointer rounded-xl border-2 border-dashed py-16 px-8 text-center transition-all duration-300 ease-out backdrop-blur-sm",
+          "group rounded-xl border-2 border-dashed py-16 px-8 text-center transition-all duration-300 ease-out backdrop-blur-sm",
           "bg-neutral-900/40 shadow-[0_0_50px_-15px_rgba(0,0,0,0.3)]",
-          isDragActive && "border-blue-500/60 bg-blue-600/10 shadow-2xl shadow-blue-600/30 scale-[1.02]",
+          disabled || status === "uploading" ? "cursor-not-allowed opacity-60" : "cursor-pointer",
+          isDragActive && !disabled && "border-blue-500/60 bg-blue-600/10 shadow-2xl shadow-blue-600/30 scale-[1.02]",
           status === "error" && "border-red-500/60 bg-red-500/10 shadow-2xl shadow-red-600/20",
-          status === "idle" && !isDragActive && "border-white/10 hover:border-blue-500/40 hover:bg-neutral-900/60 hover:shadow-[0_0_60px_-10px_rgba(0,0,0,0.4)]"
+          status === "idle" && !isDragActive && !disabled && "border-white/10 hover:border-blue-500/40 hover:bg-neutral-900/60 hover:shadow-[0_0_60px_-10px_rgba(0,0,0,0.4)]"
         )}
       >
         <input {...getInputProps()} />
