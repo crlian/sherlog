@@ -1,15 +1,22 @@
 /* tslint:disable */
 /* eslint-disable */
+export function test_normalize(message: string): string;
 export function parse_log(content: string): any;
+export function test_fingerprint(message: string): string;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
   readonly parse_log: (a: number, b: number) => any;
+  readonly test_fingerprint: (a: number, b: number) => [number, number];
+  readonly test_normalize: (a: number, b: number) => [number, number];
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+  readonly __wbindgen_exn_store: (a: number) => void;
+  readonly __externref_table_alloc: () => number;
   readonly __wbindgen_externrefs: WebAssembly.Table;
+  readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __wbindgen_start: () => void;
 }
 
