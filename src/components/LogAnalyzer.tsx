@@ -18,7 +18,10 @@ import {
     Upload,
     Shield,
     Lock,
-    RotateCw
+    RotateCw,
+    Sun,
+    Moon,
+    File
 } from "lucide-react";
 import { SimpleFileUpload } from "./ui/simple-file-upload";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
@@ -58,11 +61,35 @@ export function LogAnalyzer() {
     const [sheetOpen, setSheetOpen] = useState(false);
     const [currentFile, setCurrentFile] = useState<File | null>(null);
     const [uploadExpanded, setUploadExpanded] = useState(false);
+    const [theme, setTheme] = useState<'light' | 'dark' | null>(null);
+    const [headerExpanded, setHeaderExpanded] = useState(false);
+    const [isFileDialogOpen, setIsFileDialogOpen] = useState(false);
+    const [mounted, setMounted] = useState(false);
     const summaryRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         initWasm();
     }, []);
+
+    // Initialize theme from localStorage or system preference
+    useEffect(() => {
+        const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+        // Priority: 1) Saved preference, 2) System preference
+        const initialTheme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
+
+        setTheme(initialTheme);
+        setMounted(true);
+        document.documentElement.classList.toggle('dark', initialTheme === 'dark');
+    }, []);
+
+    const toggleTheme = () => {
+        const newTheme = theme === 'dark' ? 'light' : 'dark';
+        setTheme(newTheme);
+        document.documentElement.classList.toggle('dark', newTheme === 'dark');
+        localStorage.setItem('theme', newTheme);
+    };
 
     const handleFileUpload = async (file: File) => {
         setLoading(true);
@@ -325,16 +352,13 @@ export function LogAnalyzer() {
 
                     {/* Error Table */}
                     {result.errors.length > 0 && (
-                        <Card className="bg-neutral-900/60 border-white/10">
+                        <Card className="bg-white dark:bg-neutral-900/60 border-[#e5e7eb] dark:border-white/10 shadow-md ring-1 ring-black/[0.08] dark:ring-0">
                             <CardHeader>
                                 <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <TrendingUp className="h-5 w-5 text-red-400" aria-hidden="true" />
-                                        <CardTitle className="text-white">
-                                            Top {result.errors.length} Critical Issues
-                                        </CardTitle>
-                                    </div>
-                                    <p className="text-sm text-neutral-400 font-mono">
+                                    <CardTitle className="text-[#111827] dark:text-white text-lg font-semibold">
+                                        Issues
+                                    </CardTitle>
+                                    <p className="text-sm text-[#6b7280] dark:text-neutral-400">
                                         Sorted by frequency
                                     </p>
                                 </div>
@@ -342,23 +366,23 @@ export function LogAnalyzer() {
                             <CardContent className="px-0">
                                 <Table>
                                     <TableHeader>
-                                        <TableRow className="border-white/10 hover:bg-transparent">
-                                            <TableHead className="text-neutral-400 font-medium w-[60px]">#</TableHead>
-                                            <TableHead className="text-neutral-400 font-medium w-[100px]">Type</TableHead>
-                                            <TableHead className="text-neutral-400 font-medium w-[100px]">Severity</TableHead>
-                                            <TableHead className="text-neutral-400 font-medium">Message</TableHead>
-                                            <TableHead className="text-neutral-400 font-medium w-[120px] text-right">Occurrences</TableHead>
-                                            <TableHead className="text-neutral-400 font-medium w-[100px] text-right">Action</TableHead>
+                                        <TableRow className="border-[#e5e7eb] dark:border-white/10 hover:bg-transparent">
+                                            <TableHead className="text-[#6b7280] dark:text-neutral-400 font-medium w-[60px]">#</TableHead>
+                                            <TableHead className="text-[#6b7280] dark:text-neutral-400 font-medium w-[100px]">Type</TableHead>
+                                            <TableHead className="text-[#6b7280] dark:text-neutral-400 font-medium w-[100px]">Severity</TableHead>
+                                            <TableHead className="text-[#6b7280] dark:text-neutral-400 font-medium">Message</TableHead>
+                                            <TableHead className="text-[#6b7280] dark:text-neutral-400 font-medium w-[120px] text-right">Occurrences</TableHead>
+                                            <TableHead className="text-[#6b7280] dark:text-neutral-400 font-medium w-[100px] text-right">Action</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {result.errors.map((error, index) => (
                                             <TableRow
                                                 key={error.id}
-                                                className="border-white/5 hover:bg-white/5 cursor-pointer"
+                                                className="border-[#e5e7eb] dark:border-white/5 hover:bg-[#f9fafb] dark:hover:bg-white/5 cursor-pointer transition-colors"
                                                 onClick={() => handleViewDetails(error)}
                                             >
-                                                <TableCell className="font-mono text-neutral-500 text-sm">
+                                                <TableCell className="font-mono text-[#9ca3af] dark:text-neutral-500 text-sm">
                                                     #{index + 1}
                                                 </TableCell>
                                                 <TableCell>
@@ -373,11 +397,11 @@ export function LogAnalyzer() {
                                                         {error.severity.toUpperCase()}
                                                     </Badge>
                                                 </TableCell>
-                                                <TableCell className="text-white font-medium max-w-md truncate">
+                                                <TableCell className="text-[#111827] dark:text-white font-medium max-w-md truncate">
                                                     {error.message}
                                                 </TableCell>
                                                 <TableCell className="text-right">
-                                                    <Badge variant="secondary" className="font-mono">
+                                                    <Badge variant="secondary" className="font-mono bg-[#f3f4f6] dark:bg-neutral-800 border-[#e5e7eb] dark:border-white/10 text-[#111827] dark:text-white">
                                                         <TrendingUp className="h-3 w-3 mr-1" aria-hidden="true" />
                                                         {formatOccurrences(error.occurrences)}
                                                     </Badge>
@@ -386,7 +410,7 @@ export function LogAnalyzer() {
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
-                                                        className="h-8 gap-1.5 text-white hover:bg-white/10 hover:scale-[1.02] active:scale-[0.98]"
+                                                        className="h-8 gap-1.5 text-[#111827] dark:text-white hover:bg-[#f3f4f6] dark:hover:bg-white/10 hover:scale-[1.02] active:scale-[0.98]"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             handleViewDetails(error);
@@ -450,22 +474,18 @@ export function LogAnalyzer() {
 interface StatCardProps {
     label: string;
     value: string;
-    icon: React.ComponentType<{ className?: string }>;
     className?: string;
 }
 
-function StatCard({ label, value, icon: Icon, className }: StatCardProps) {
+function StatCard({ label, value, className }: StatCardProps) {
     return (
-        <div className="space-y-1">
-            <p className="text-neutral-400 text-xs mb-1.5 font-medium tracking-wide uppercase">
+        <div className="space-y-2">
+            <p className="text-[#6b7280] dark:text-neutral-400 text-xs font-medium tracking-wide uppercase">
                 {label}
             </p>
-            <div className="flex items-center gap-2">
-                <Icon className={`h-4 w-4 ${className}`} aria-hidden="true" />
-                <p className={`font-semibold text-lg font-mono ${className}`}>
-                    {value}
-                </p>
-            </div>
+            <p className={`font-semibold text-2xl font-mono ${className}`}>
+                {value}
+            </p>
         </div>
     );
 }
@@ -499,17 +519,17 @@ function ErrorDetailSheet({ error, open, onOpenChange, onCopy }: ErrorDetailShee
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent className="w-full sm:max-w-2xl bg-neutral-950 border-white/10 overflow-y-auto">
+            <SheetContent className="w-full sm:max-w-2xl bg-white dark:bg-neutral-950 border-[#e5e7eb] dark:border-white/10 overflow-y-auto">
                 <SheetHeader className="space-y-4">
                     <div className="flex items-start justify-between">
-                        <SheetTitle className="text-white text-xl font-bold pr-8">
+                        <SheetTitle className="text-[#111827] dark:text-white text-xl font-bold pr-8">
                             Error Details
                         </SheetTitle>
                         <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => onOpenChange(false)}
-                            className="h-8 w-8 p-0 hover:bg-white/10"
+                            className="h-8 w-8 p-0 hover:bg-[#f3f4f6] dark:hover:bg-white/10"
                         >
                             <X className="h-4 w-4" />
                         </Button>
@@ -533,32 +553,32 @@ function ErrorDetailSheet({ error, open, onOpenChange, onCopy }: ErrorDetailShee
                 <div className="mt-6 space-y-6">
                     {/* Error Message */}
                     <div className="space-y-2">
-                        <h3 className="text-sm font-medium text-neutral-400 uppercase tracking-wide">
+                        <h3 className="text-sm font-medium text-[#6b7280] dark:text-neutral-400 uppercase tracking-wide">
                             Error Message
                         </h3>
-                        <p className="text-white font-medium text-base leading-relaxed">
+                        <p className="text-[#111827] dark:text-white font-medium text-base leading-relaxed">
                             {error.message}
                         </p>
                     </div>
 
-                    <Separator className="bg-white/10" />
+                    <Separator className="bg-[#e5e7eb] dark:bg-white/10" />
 
                     {/* Location */}
                     {error.file && (
                         <>
                             <div className="space-y-3">
-                                <h3 className="text-sm font-medium text-neutral-400 uppercase tracking-wide">
+                                <h3 className="text-sm font-medium text-[#6b7280] dark:text-neutral-400 uppercase tracking-wide">
                                     Location
                                 </h3>
                                 <div className="flex items-center gap-2 flex-wrap">
-                                    <code className="text-sm text-neutral-300 font-mono bg-neutral-900/80 px-3 py-2 rounded border border-white/5">
+                                    <code className="text-sm text-[#111827] dark:text-neutral-300 font-mono bg-[#f3f4f6] dark:bg-neutral-900/80 px-3 py-2 rounded border border-[#e5e7eb] dark:border-white/5">
                                         {formatLocation(error)}
                                     </code>
                                     <Button
                                         variant="ghost"
                                         size="sm"
                                         onClick={handleCopyLocation}
-                                        className="h-8 gap-1.5 text-white hover:bg-white/10 hover:scale-[1.02] active:scale-[0.98]"
+                                        className="h-8 gap-1.5 text-[#111827] dark:text-white hover:bg-[#f3f4f6] dark:hover:bg-white/10 hover:scale-[1.02] active:scale-[0.98]"
                                     >
                                         {copiedLocation ? (
                                             <>
@@ -574,7 +594,7 @@ function ErrorDetailSheet({ error, open, onOpenChange, onCopy }: ErrorDetailShee
                                     </Button>
                                 </div>
                             </div>
-                            <Separator className="bg-white/10" />
+                            <Separator className="bg-[#e5e7eb] dark:bg-white/10" />
                         </>
                     )}
 
@@ -582,29 +602,29 @@ function ErrorDetailSheet({ error, open, onOpenChange, onCopy }: ErrorDetailShee
                     {error.timestamp && (
                         <>
                             <div className="space-y-2">
-                                <h3 className="text-sm font-medium text-neutral-400 uppercase tracking-wide">
+                                <h3 className="text-sm font-medium text-[#6b7280] dark:text-neutral-400 uppercase tracking-wide">
                                     Timestamp
                                 </h3>
-                                <div className="flex items-center gap-2 text-neutral-300 font-mono text-sm">
+                                <div className="flex items-center gap-2 text-[#111827] dark:text-neutral-300 font-mono text-sm">
                                     <Clock className="h-4 w-4" aria-hidden="true" />
                                     <time dateTime={error.timestamp}>{error.timestamp}</time>
                                 </div>
                             </div>
-                            <Separator className="bg-white/10" />
+                            <Separator className="bg-[#e5e7eb] dark:bg-white/10" />
                         </>
                     )}
 
                     {/* Full Stack Trace */}
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-medium text-neutral-400 uppercase tracking-wide">
+                            <h3 className="text-sm font-medium text-[#6b7280] dark:text-neutral-400 uppercase tracking-wide">
                                 Full Stack Trace
                             </h3>
                             <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={handleCopyTrace}
-                                className="h-8 gap-1.5 text-white hover:bg-white/10 hover:scale-[1.02] active:scale-[0.98]"
+                                className="h-8 gap-1.5 text-[#111827] dark:text-white hover:bg-[#f3f4f6] dark:hover:bg-white/10 hover:scale-[1.02] active:scale-[0.98]"
                             >
                                 {copiedTrace ? (
                                     <>
@@ -619,7 +639,7 @@ function ErrorDetailSheet({ error, open, onOpenChange, onCopy }: ErrorDetailShee
                                 )}
                             </Button>
                         </div>
-                        <pre className="text-xs text-neutral-300 bg-neutral-900/80 p-4 rounded-lg overflow-x-auto border border-white/5 font-mono leading-relaxed max-h-96">
+                        <pre className="text-xs text-[#111827] dark:text-neutral-300 bg-[#f3f4f6] dark:bg-neutral-900/80 p-4 rounded-lg overflow-x-auto border border-[#e5e7eb] dark:border-white/5 font-mono leading-relaxed max-h-96">
                             {error.full_trace}
                         </pre>
                     </div>
