@@ -225,9 +225,16 @@ export async function parseLogFileStreaming(
 
             // Update progress (estimate based on bytes processed)
             processedBytes += line.length + 1; // +1 for newline
-            if (onProgress && lineCount % 1000 === 0) { // Update every 1000 lines for performance
+
+            // Yield control to browser every 1000 lines to keep UI responsive
+            if (lineCount % 1000 === 0) {
                 const progress = Math.min((processedBytes / totalBytes) * 100, 100);
-                onProgress(progress);
+                if (onProgress) {
+                    onProgress(progress);
+                }
+
+                // Yield to browser to update UI and prevent freezing
+                await new Promise(resolve => setTimeout(resolve, 0));
             }
         }
 
