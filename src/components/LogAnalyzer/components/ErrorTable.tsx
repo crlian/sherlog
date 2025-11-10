@@ -36,6 +36,12 @@ interface ErrorTableProps {
 export function ErrorTable({ errors, onViewDetails }: ErrorTableProps) {
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
+    // Calculate total occurrences for percentage calculation
+    const totalOccurrences = useMemo(() =>
+        errors.reduce((sum, error) => sum + error.occurrences, 0),
+        [errors]
+    );
+
     // Memoize enriched errors to avoid recalculating colors on every render
     const enrichedErrors = useMemo(() =>
         errors.map((error, index) => ({
@@ -43,8 +49,9 @@ export function ErrorTable({ errors, onViewDetails }: ErrorTableProps) {
             index: index + 1,
             typeColor: getTypeColor(error.type),
             severityColor: getSeverityColor(error.severity),
+            percentage: totalOccurrences > 0 ? (error.occurrences / totalOccurrences * 100).toFixed(1) : '0',
         })),
-        [errors]
+        [errors, totalOccurrences]
     );
 
     const toggleRow = (errorId: string) => {
@@ -54,6 +61,14 @@ export function ErrorTable({ errors, onViewDetails }: ErrorTableProps) {
                 newSet.delete(errorId);
             } else {
                 newSet.add(errorId);
+
+                // Auto-scroll to expanded row after a short delay
+                setTimeout(() => {
+                    const rowElement = document.querySelector(`[data-error-id="${errorId}"]`);
+                    if (rowElement) {
+                        rowElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 100);
             }
             return newSet;
         });
@@ -112,6 +127,7 @@ export function ErrorTable({ errors, onViewDetails }: ErrorTableProps) {
                                     <>
                                         {/* Main Row */}
                                         <TableRow
+                                            data-error-id={error.id}
                                             className="border-[#e5e7eb] dark:border-white/5 hover:bg-[#f9fafb] dark:hover:bg-white/5 transition-colors"
                                         >
                                             <TableCell>
@@ -151,10 +167,15 @@ export function ErrorTable({ errors, onViewDetails }: ErrorTableProps) {
                                                 {error.message}
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <Badge variant="secondary" className="font-mono bg-[#f3f4f6] dark:bg-neutral-800 border-[#e5e7eb] dark:border-white/10 text-[#111827] dark:text-white">
-                                                    <TrendingUp className="h-3 w-3 mr-1" aria-hidden="true" />
-                                                    {formatOccurrences(error.occurrences)}
-                                                </Badge>
+                                                <div className="flex flex-col items-end gap-1">
+                                                    <Badge variant="secondary" className="font-mono bg-[#f3f4f6] dark:bg-neutral-800 border-[#e5e7eb] dark:border-white/10 text-[#111827] dark:text-white">
+                                                        <TrendingUp className="h-3 w-3 mr-1" aria-hidden="true" />
+                                                        {formatOccurrences(error.occurrences)}
+                                                    </Badge>
+                                                    <span className="text-[10px] text-[#9ca3af] dark:text-neutral-500 font-mono">
+                                                        {error.percentage}%
+                                                    </span>
+                                                </div>
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <Button
