@@ -127,10 +127,30 @@ export function LogAnalyzer() {
         setError(null);
         setCurrentFile(null);
         setUploadExpanded(false);
+        setHeaderExpanded(false);
 
         // Scroll to top smoothly
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
+
+    const handleHeaderFileUpload = async (file: File) => {
+        setHeaderExpanded(false);
+        setIsFileDialogOpen(false);
+        await handleFileUpload(file);
+    };
+
+    // Track when file dialog opens/closes
+    useEffect(() => {
+        const handleFocus = () => {
+            // When window regains focus after file dialog, mark dialog as closed
+            if (isFileDialogOpen) {
+                setIsFileDialogOpen(false);
+            }
+        };
+
+        window.addEventListener('focus', handleFocus);
+        return () => window.removeEventListener('focus', handleFocus);
+    }, [isFileDialogOpen]);
 
     const handleViewDetails = (error: ParsedError) => {
         setSelectedError(error);
@@ -157,76 +177,73 @@ export function LogAnalyzer() {
         return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     };
 
+    // Prevent hydration mismatch - don't render until mounted
+    if (!mounted) {
+        return null;
+    }
+
     return (
         <div className={`transition-all duration-500 ${result ? 'w-full' : 'max-w-lg'}`}>
-            {/* Loading Overlay */}
-            {loading && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center animate-in fade-in-0 duration-300">
-                    <Card className="bg-neutral-900 border-blue-500/30 p-6 shadow-2xl shadow-blue-500/20">
-                        <div className="flex items-center gap-4">
-                            <div className="h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                            <div>
-                                <p className="text-white font-medium">Analyzing evidence...</p>
-                                <p className="text-neutral-400 text-sm">{currentFile?.name}</p>
-                            </div>
-                        </div>
-                    </Card>
-                </div>
-            )}
+            {/* Floating Theme Toggle - Top Right */}
+            <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleTheme}
+                className="fixed top-6 right-6 z-50 h-10 w-10 rounded-lg"
+                aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+            >
+                {theme === 'dark' ? (
+                    <Sun className="h-5 w-5" />
+                ) : (
+                    <Moon className="h-5 w-5" />
+                )}
+            </Button>
 
-            {/* Sticky Contextual Header (shown after results) */}
+            {/* Compact Glassmorphism Header - Top Left - Expands to Dropzone */}
             {result && (
-                <div className="fixed top-0 left-0 right-0 z-40 bg-neutral-950/95 backdrop-blur-md border-b border-white/10 shadow-lg bounce-in">
-                    <div className="max-w-7xl mx-auto px-8 h-14 flex items-center justify-between gap-4">
-                        {/* Left: Branding + File Info */}
-                        <div className="flex items-center gap-6">
-                            <div className="flex items-center gap-2">
-                                <span className="text-lg font-display font-bold text-white">🕵️ Sherlog</span>
+                <div
+                    className="fixed top-6 left-6 z-50"
+                    onMouseEnter={() => setHeaderExpanded(true)}
+                    onMouseLeave={() => {
+                        // Don't collapse if file dialog is open
+                        if (!isFileDialogOpen) {
+                            setHeaderExpanded(false);
+                        }
+                    }}
+                >
+                    <div className={`transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${
+                        headerExpanded ? 'w-[280px]' : 'w-auto'
+                    }`}>
+                        {!headerExpanded ? (
+                            // Compact state - Wider horizontal layout
+                            <div className="bg-white/80 dark:bg-neutral-900/80 backdrop-blur-xl border border-[#e5e7eb] dark:border-white/10 rounded-xl shadow-lg px-7 py-3.5 transition-all duration-300 hover:shadow-xl cursor-pointer">
+                                <div className="flex items-center gap-5">
+                                    <div className="flex items-center gap-2.5">
+                                        <Upload className="h-4.5 w-4.5 text-[#1e40af] dark:text-blue-400 transition-transform duration-300 hover:scale-110" />
+                                        <h2 className="text-sm font-display font-bold text-[#111827] dark:text-white whitespace-nowrap">Sherlog</h2>
+                                    </div>
+                                    <div className="h-4 w-px bg-[#e5e7eb] dark:bg-white/10" />
+                                    <div className="flex items-center gap-1.5 text-xs text-[#6b7280] dark:text-neutral-400">
+                                        <Upload className="h-3.5 w-3.5" />
+                                        <span className="whitespace-nowrap">New file</span>
+                                    </div>
+                                </div>
                             </div>
-
-                            <Separator orientation="vertical" className="h-6 bg-white/10" />
-
-                            <div className="flex items-center gap-2">
-                                <FileText className="h-4 w-4 text-blue-400" />
-                                <span className="text-sm font-medium text-white truncate max-w-[200px]">
-                                    {currentFile?.name || 'Unknown file'}
-                                </span>
-                                <span className="text-xs text-neutral-500">
-                                    ({currentFile && formatFileSize(currentFile.size)})
-                                </span>
+                        ) : (
+                            // Expanded state - Compact dropzone (expands downward)
+                            <div className="bg-white/95 dark:bg-neutral-900/95 backdrop-blur-xl border border-[#e5e7eb] dark:border-white/10 rounded-xl shadow-xl p-2">
+                                <SimpleFileUpload
+                                    placeholder="Drop new file here"
+                                    maxSizeMB={100}
+                                    accept={{ 'text/plain': ['.log', '.txt'] }}
+                                    onUpload={handleHeaderFileUpload}
+                                    disabled={loading}
+                                    onFileDialogOpen={() => setIsFileDialogOpen(true)}
+                                    onFileDialogClose={() => setIsFileDialogOpen(false)}
+                                    className="[&>div]:!py-4 [&>div]:!px-3 [&>div]:!rounded-lg [&>div]:!shadow-none [&_svg]:!h-5 [&_svg]:!w-5 [&_p]:!text-xs"
+                                />
                             </div>
-                        </div>
-
-                        {/* Right: Stats + Actions */}
-                        <div className="flex items-center gap-4">
-                            {/* Inline Stats */}
-                            <div className="hidden md:flex items-center gap-4 text-xs font-mono">
-                                <span className="text-neutral-400">
-                                    <span className="text-red-400 font-semibold"># {result.summary.total_errors}</span>
-                                </span>
-                                <span className="text-neutral-400">|</span>
-                                <span className="text-neutral-400">
-                                    <span className="text-yellow-400 font-semibold">⚠️ {result.summary.total_warnings}</span>
-                                </span>
-                                <span className="text-neutral-400">|</span>
-                                <span className="text-neutral-400">
-                                    <span className="text-blue-400 font-semibold">ⓘ {result.summary.total_info}</span>
-                                </span>
-                            </div>
-
-                            <Separator orientation="vertical" className="hidden md:block h-6 bg-white/10" />
-
-                            {/* New File Button */}
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={handleNewUpload}
-                                className="h-9 gap-2 text-white hover:bg-white/10 hover:scale-[1.02] active:scale-[0.98]"
-                            >
-                                <RotateCw className="h-3.5 w-3.5" />
-                                New File
-                            </Button>
-                        </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -234,43 +251,49 @@ export function LogAnalyzer() {
             {/* Upload Section */}
             {!result ? (
                 // Initial State: Large centered upload with header
-                <div className="min-h-screen flex flex-col items-center justify-center space-y-16 -mt-16">
+                <div className="min-h-screen flex flex-col items-center justify-center space-y-8 md:space-y-10 -mt-16">
                     {/* Sherlog Header - Only shown when no results */}
-                    <header className="text-center space-y-3 animate-in fade-in-0 slide-in-from-top-4 duration-500">
-                        <h1 className="font-display text-6xl font-bold text-neutral-50 leading-none" style={{letterSpacing: "-0.02em"}}>
-                            <span className="bg-gradient-to-b from-neutral-50 to-neutral-200 bg-clip-text text-transparent">
+                    <header className="text-center space-y-4 animate-in fade-in-0 slide-in-from-bottom-6 duration-700 ease-out">
+                        <h1 className="font-display text-7xl md:text-8xl font-bold leading-none" style={{letterSpacing: "-0.02em"}}>
+                            <span className="bg-gradient-to-b from-[#0f172a] via-[#1e293b] to-[#475569] dark:from-neutral-50 dark:via-neutral-100 dark:to-neutral-300 bg-clip-text text-transparent drop-shadow-[0_2px_8px_rgba(0,0,0,0.1)] dark:drop-shadow-[0_4px_20px_rgba(255,255,255,0.1)]">
                                 Sherlog
                             </span>
                         </h1>
-                        <p className="font-sans text-sm font-light text-neutral-400 tracking-wide">
+                        <p className="font-sans text-base font-light text-[#475569] dark:text-neutral-400 tracking-wide">
                             Elementary, my dear developer
                         </p>
                     </header>
 
                     {/* Upload + Badges */}
-                    <div className="space-y-6 w-full animate-in fade-in-0 slide-in-from-top-4 duration-500 delay-100">
-                        <SimpleFileUpload
-                            placeholder="Drop your evidence here"
-                            maxSizeMB={100}
-                            accept={{ 'text/plain': ['.log', '.txt'] }}
-                            onUpload={handleFileUpload}
-                            disabled={loading}
-                        />
+                    <div className="space-y-8 w-full">
+                        <div className="animate-in fade-in-0 slide-in-from-bottom-8 duration-700 delay-150 ease-out">
+                            <SimpleFileUpload
+                                placeholder="Drop your evidence here"
+                                maxSizeMB={100}
+                                accept={{ 'text/plain': ['.log', '.txt'] }}
+                                onUpload={handleFileUpload}
+                                disabled={loading}
+                            />
+                        </div>
+
 
                         {/* Trust Badges */}
-                        <div className="flex items-center justify-center gap-3">
-                            <Badge variant="secondary" className="text-white gap-1.5 bg-neutral-900/60 border-white/10">
-                                <Shield className="h-4 w-4" />
+                        <div className="flex items-center justify-center gap-6 animate-in fade-in-0 duration-700 delay-300 ease-out">
+                            <Badge variant="secondary" className="text-[#64748b] dark:text-neutral-400 gap-2 bg-transparent border-0 shadow-none px-0">
+                                <Shield className="h-4 w-4 text-[#94a3b8] dark:text-neutral-500" />
                                 100% Local Parsing
                             </Badge>
-                            <Badge variant="secondary" className="text-white gap-1.5 bg-neutral-900/60 border-white/10">
-                                <Lock className="h-4 w-4" />
+                            <Badge variant="secondary" className="text-[#64748b] dark:text-neutral-400 gap-2 bg-transparent border-0 shadow-none px-0">
+                                <Lock className="h-4 w-4 text-[#94a3b8] dark:text-neutral-500" />
                                 Private by Design
                             </Badge>
                         </div>
 
                         {/* Hint */}
-                        <p className="font-mono text-xs text-center text-neutral-500">.log, .txt • Max 100MB</p>
+                        <div className="flex items-center justify-center gap-2 -mt-2 animate-in fade-in-0 duration-700 delay-400 ease-out">
+                            <File className="h-3.5 w-3.5 text-[#94a3b8] dark:text-neutral-500" />
+                            <p className="font-mono text-xs text-[#64748b] dark:text-neutral-400">.log, .txt • Max 100MB</p>
+                        </div>
                     </div>
                 </div>
             ) : (
@@ -293,53 +316,57 @@ export function LogAnalyzer() {
                     )}
 
                     {/* Summary Stats */}
-                    <Card className="bg-neutral-900/60 border-white/10">
+                    <Card className="bg-white dark:bg-neutral-900/60 border-[#e5e7eb] dark:border-white/10 shadow-md ring-1 ring-black/[0.08] dark:ring-0">
                         <CardHeader>
-                            <div className="flex items-center gap-2">
-                                <FileText className="h-5 w-5 text-blue-400" aria-hidden="true" />
-                                <CardTitle
-                                    ref={summaryRef}
-                                    tabIndex={-1}
-                                    className="text-white outline-none"
-                                >
-                                    Case Summary
-                                </CardTitle>
+                            <div className="flex items-start justify-between">
+                                <div>
+                                    <CardTitle
+                                        ref={summaryRef}
+                                        tabIndex={-1}
+                                        className="text-[#111827] dark:text-white outline-none text-lg font-semibold"
+                                    >
+                                        Summary
+                                    </CardTitle>
+                                    <CardDescription className="text-[#6b7280] mt-1.5">
+                                        {result.summary.total_lines.toLocaleString()} log entries analyzed
+                                    </CardDescription>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-sm font-medium text-[#111827] dark:text-white truncate max-w-[200px]">
+                                        {currentFile?.name || 'Unknown file'}
+                                    </p>
+                                    <p className="text-xs text-[#6b7280] dark:text-neutral-500 mt-0.5">
+                                        {currentFile && formatFileSize(currentFile.size)}
+                                    </p>
+                                </div>
                             </div>
-                            <CardDescription>
-                                Analysis of {result.summary.total_lines.toLocaleString()} log entries
-                            </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                            <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
                                 <StatCard
                                     label="Total Lines"
                                     value={result.summary.total_lines.toLocaleString()}
-                                    icon={FileText}
-                                    className="text-neutral-400"
+                                    className="text-[#6b7280] dark:text-neutral-400"
                                 />
                                 <StatCard
                                     label="Errors"
                                     value={result.summary.total_errors.toLocaleString()}
-                                    icon={XCircle}
-                                    className="text-red-400"
+                                    className="text-red-600 dark:text-red-400"
                                 />
                                 <StatCard
                                     label="Warnings"
                                     value={result.summary.total_warnings.toLocaleString()}
-                                    icon={TriangleAlert}
-                                    className="text-yellow-400"
+                                    className="text-yellow-600 dark:text-yellow-400"
                                 />
                                 <StatCard
                                     label="Info"
                                     value={result.summary.total_info.toLocaleString()}
-                                    icon={Info}
-                                    className="text-blue-400"
+                                    className="text-[#1e40af] dark:text-blue-400"
                                 />
                                 <StatCard
                                     label="Unique Errors"
                                     value={result.summary.unique_errors.toString()}
-                                    icon={Hash}
-                                    className="text-purple-400"
+                                    className="text-purple-600 dark:text-purple-400"
                                 />
                             </div>
                         </CardContent>
