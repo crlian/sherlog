@@ -66,7 +66,7 @@ export function HeaderUpload({ onUpload, disabled = false }: HeaderUploadProps) 
                     <div className="bg-white/95 dark:bg-neutral-900/95 backdrop-blur-xl border border-[#e5e7eb] dark:border-white/10 rounded-xl shadow-xl p-2">
                         <SimpleFileUpload
                             placeholder="Drop new file here"
-                            maxSizeMB={100}
+                            maxSizeMB={1000}
                             accept={{ 'text/plain': ['.log', '.txt'] }}
                             onUpload={handleFileUpload}
                             disabled={disabled}
