@@ -8,14 +8,27 @@ import '@fontsource/jetbrains-mono/500.css';
 const { title } = Astro.props;
 ---
 
-<html lang="en">
+<html lang="en" class="transition-colors duration-300">
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<title>{title}</title>
+		<!-- Prevent theme flash by loading theme before render -->
+		<script is:inline>
+			// This runs before React hydrates, preventing flash
+			const savedTheme = localStorage.getItem('theme');
+			const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+			// Priority: 1) Saved preference, 2) System preference
+			const shouldBeDark = savedTheme ? savedTheme === 'dark' : systemPrefersDark;
+
+			if (shouldBeDark) {
+				document.documentElement.classList.add('dark');
+			}
+		</script>
 	</head>
-	<body>
+	<body class="transition-colors duration-300">
 		<slot />
 	</body>
 </html>
