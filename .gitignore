@@ -51,6 +51,10 @@ coverage/
 # Misc
 .cache/
 
+# Rust / WASM build artifacts
+parser-wasm/target/
+parser-wasm/pkg/.gitignore
+
 # Project docs (exclude from repo, keep README.md only)
 *.md
 !README.md
