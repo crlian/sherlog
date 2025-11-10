@@ -23,6 +23,7 @@ export function LogAnalyzer() {
         loading,
         error,
         currentFile,
+        progress,
         summaryRef,
         handleFileUpload,
         resetAnalysis,
@@ -94,6 +95,8 @@ export function LogAnalyzer() {
                 <UploadSection
                     onUpload={handleFileUpload}
                     disabled={loading}
+                    loading={loading}
+                    progress={progress}
                 />
             ) : (
                 // After Upload: Results with stats and error table

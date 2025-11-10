@@ -516,7 +516,173 @@ fn parse_log_content(content: &str) -> ParseResult {
 }
 
 // ============================================================================
-// WASM EXPORTS
+// STREAMING PARSER (New - for large file support)
+// ============================================================================
+
+/// Streaming parser that processes lines incrementally
+/// This allows processing files larger than available memory
+#[wasm_bindgen]
+pub struct LogParser {
+    error_map: HashMap<String, ParsedError>,
+    total_lines: usize,
+    total_errors: usize,
+    total_warnings: usize,
+    total_info: usize,
+
+    // State for multi-line stack traces
+    in_stack_trace: bool,
+    last_error_fingerprint: Option<String>,
+    current_stack_trace: String,
+}
+
+#[wasm_bindgen]
+impl LogParser {
+    /// Create a new parser instance
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> LogParser {
+        LogParser {
+            error_map: HashMap::new(),
+            total_lines: 0,
+            total_errors: 0,
+            total_warnings: 0,
+            total_info: 0,
+            in_stack_trace: false,
+            last_error_fingerprint: None,
+            current_stack_trace: String::new(),
+        }
+    }
+
+    /// Process a single line of log content
+    /// This method is called repeatedly for each line in the file
+    #[wasm_bindgen]
+    pub fn process_line(&mut self, line: &str) {
+        self.total_lines += 1;
+
+        let error_type = determine_error_type(line);
+
+        // Check if this is an error line
+        let is_error_line = NODE_ERROR.is_match(line) ||
+                           PYTHON_ERROR.is_match(line) ||
+                           JAVA_ERROR.is_match(line) ||
+                           GENERIC_ERROR.is_match(line);
+
+        if is_error_line {
+            // Extract error details
+            let message = extract_error_message(line);
+            let timestamp = extract_timestamp(line);
+
+            // Try to extract location from this line using any format
+            let (file, line_num, column) = extract_location_any_format(line);
+
+            let severity = determine_severity(&error_type, &message);
+            let fingerprint = generate_fingerprint(&message, &file, &line_num);
+
+            // Update counts
+            match error_type {
+                ErrorType::Error => self.total_errors += 1,
+                ErrorType::Warning => self.total_warnings += 1,
+                ErrorType::Info => self.total_info += 1,
+            }
+
+            // Check if we've seen this error before
+            if let Some(existing) = self.error_map.get_mut(&fingerprint) {
+                // Increment occurrence count
+                existing.occurrences += 1;
+                // Update full trace with new occurrence
+                existing.full_trace.push_str("\n\n---\n\n");
+                existing.full_trace.push_str(line);
+            } else {
+                // New error - create entry
+                let parsed_error = ParsedError {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    error_type: error_type.clone(),
+                    severity,
+                    message: message.clone(),
+                    full_trace: line.to_string(),
+                    file: file.clone(),
+                    line: line_num,
+                    column,
+                    occurrences: 1,
+                    timestamp,
+                    fingerprint: fingerprint.clone(),
+                };
+
+                self.error_map.insert(fingerprint.clone(), parsed_error);
+            }
+
+            self.last_error_fingerprint = Some(fingerprint);
+            self.current_stack_trace = String::new();
+            self.in_stack_trace = true;
+        } else if self.in_stack_trace && is_stack_trace_line(line) {
+            // This is a stack trace line - append to current error's trace
+            self.current_stack_trace.push('\n');
+            self.current_stack_trace.push_str(line);
+
+            if let Some(ref fp) = self.last_error_fingerprint {
+                if let Some(error) = self.error_map.get_mut(fp) {
+                    error.full_trace.push('\n');
+                    error.full_trace.push_str(line);
+
+                    // Try to extract location if we don't have one yet
+                    if error.file.is_none() {
+                        let (file, line_num, column) = extract_location_any_format(line);
+                        if file.is_some() {
+                            error.file = file;
+                            error.line = line_num;
+                            error.column = column;
+                        }
+                    }
+                }
+            }
+        } else if self.in_stack_trace && CAUSED_BY.is_match(line) {
+            // Handle chained errors (Caused by:, Suppressed:)
+            if let Some(ref fp) = self.last_error_fingerprint {
+                if let Some(error) = self.error_map.get_mut(fp) {
+                    error.full_trace.push('\n');
+                    error.full_trace.push_str(line);
+                }
+            }
+        } else if !line.trim().is_empty() {
+            // Non-empty line that's not a stack trace - might be a warning or info
+            if GENERIC_WARN.is_match(line) {
+                self.total_warnings += 1;
+            } else if GENERIC_INFO.is_match(line) {
+                self.total_info += 1;
+            }
+            self.in_stack_trace = false;
+        }
+    }
+
+    /// Get the final parse results
+    /// Call this after all lines have been processed
+    #[wasm_bindgen]
+    pub fn get_result(&self) -> JsValue {
+        // Convert to Vec and sort by occurrences (descending)
+        let mut errors: Vec<ParsedError> = self.error_map.values().cloned().collect();
+        errors.sort_by(|a, b| b.occurrences.cmp(&a.occurrences));
+
+        let unique_errors = errors.len();
+
+        // Return top 20 only
+        errors.truncate(20);
+
+        let result = ParseResult {
+            summary: LogStats {
+                total_lines: self.total_lines,
+                total_errors: self.total_errors,
+                total_warnings: self.total_warnings,
+                total_info: self.total_info,
+                unique_errors,
+            },
+            errors,
+        };
+
+        serde_wasm_bindgen::to_value(&result).unwrap()
+    }
+}
+
+// ============================================================================
+// WASM EXPORTS (Legacy - kept for backwards compatibility)
 // ============================================================================
 
 #[wasm_bindgen]

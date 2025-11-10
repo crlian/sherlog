@@ -59,6 +59,66 @@ export async function initWasm(): Promise<void> {
 }
 
 // ============================================================================
+// STREAMING HELPERS (for large file support)
+// ============================================================================
+
+/**
+ * Read file in chunks using ReadableStream API
+ * This prevents loading the entire file into memory at once
+ */
+async function* readFileInChunks(file: File, chunkSize: number = 10 * 1024 * 1024) {
+    const stream = file.stream();
+    const reader = stream.getReader();
+
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+
+            if (done) break;
+
+            // value is a Uint8Array (raw bytes)
+            // Convert to text
+            const text = new TextDecoder().decode(value, { stream: true });
+
+            yield text;
+        }
+    } finally {
+        reader.releaseLock();
+    }
+}
+
+/**
+ * Read file line by line using chunks
+ * Handles lines that are split across chunks
+ */
+async function* readLinesFromFile(file: File, chunkSize: number = 10 * 1024 * 1024) {
+    let buffer = ''; // Buffer for incomplete lines
+
+    for await (const chunk of readFileInChunks(file, chunkSize)) {
+        // Concatenate previous buffer with new chunk
+        buffer += chunk;
+
+        // Split by newlines
+        const lines = buffer.split('\n');
+
+        // The last line might be incomplete, save it for next chunk
+        buffer = lines.pop() || '';
+
+        // Yield all complete lines
+        for (const line of lines) {
+            if (line.trim()) { // Skip empty lines
+                yield line;
+            }
+        }
+    }
+
+    // Process the last line if there's anything left in buffer
+    if (buffer.trim()) {
+        yield buffer;
+    }
+}
+
+// ============================================================================
 // PARSING FUNCTIONS
 // ============================================================================
 
@@ -123,6 +183,83 @@ export async function parseLogContent(content: string): Promise<ParseResult> {
         return result as ParseResult;
     } catch (error) {
         console.error("Error parsing log content:", error);
+        throw error;
+    }
+}
+
+/**
+ * Parse log file using streaming (for large files >100MB)
+ * This processes the file line by line, keeping memory usage constant
+ *
+ * @param file - The log file to parse
+ * @param onProgress - Optional callback for progress updates (0-100)
+ * @returns ParseResult with aggregated error statistics
+ */
+export async function parseLogFileStreaming(
+    file: File,
+    onProgress?: (progress: number) => void
+): Promise<ParseResult> {
+    if (!wasmInitialized) {
+        await initWasm();
+    }
+
+    try {
+        // Dynamically import the LogParser class
+        const { LogParser } = await import('../../parser-wasm/pkg/parser_wasm');
+
+        // Create parser instance
+        const parser = new LogParser();
+
+        let processedBytes = 0;
+        const totalBytes = file.size;
+
+        console.log(`🔄 Starting streaming parse of ${(totalBytes / 1024 / 1024).toFixed(2)}MB file...`);
+
+        let lineCount = 0;
+        const startTime = performance.now();
+
+        // Process file line by line
+        for await (const line of readLinesFromFile(file)) {
+            parser.process_line(line);
+            lineCount++;
+
+            // Update progress (estimate based on bytes processed)
+            processedBytes += line.length + 1; // +1 for newline
+            if (onProgress && lineCount % 1000 === 0) { // Update every 1000 lines for performance
+                const progress = Math.min((processedBytes / totalBytes) * 100, 100);
+                onProgress(progress);
+            }
+        }
+
+        // Get final results
+        const result = parser.get_result();
+
+        // Free WASM memory
+        parser.free();
+
+        const endTime = performance.now();
+        const duration = ((endTime - startTime) / 1000).toFixed(2);
+
+        console.log(`✅ Streaming parse complete in ${duration}s (${lineCount} lines)`);
+
+        // Final progress update
+        if (onProgress) {
+            onProgress(100);
+        }
+
+        // Validate result
+        if (!result || typeof result !== 'object') {
+            throw new Error('WASM parser returned invalid result');
+        }
+
+        if (!('summary' in result) || !('errors' in result)) {
+            console.error('Invalid result structure:', result);
+            throw new Error('WASM parser returned invalid structure (missing summary or errors)');
+        }
+
+        return result as ParseResult;
+    } catch (error) {
+        console.error("Error during streaming parse:", error);
         throw error;
     }
 }

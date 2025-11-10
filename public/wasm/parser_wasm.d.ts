@@ -1,13 +1,39 @@
 /* tslint:disable */
 /* eslint-disable */
-export function test_normalize(message: string): string;
-export function parse_log(content: string): any;
 export function test_fingerprint(message: string): string;
+export function parse_log(content: string): any;
+export function test_normalize(message: string): string;
+/**
+ * Streaming parser that processes lines incrementally
+ * This allows processing files larger than available memory
+ */
+export class LogParser {
+  free(): void;
+  [Symbol.dispose](): void;
+  /**
+   * Get the final parse results
+   * Call this after all lines have been processed
+   */
+  get_result(): any;
+  /**
+   * Process a single line of log content
+   * This method is called repeatedly for each line in the file
+   */
+  process_line(line: string): void;
+  /**
+   * Create a new parser instance
+   */
+  constructor();
+}
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
+  readonly __wbg_logparser_free: (a: number, b: number) => void;
+  readonly logparser_get_result: (a: number) => any;
+  readonly logparser_new: () => number;
+  readonly logparser_process_line: (a: number, b: number, c: number) => void;
   readonly parse_log: (a: number, b: number) => any;
   readonly test_fingerprint: (a: number, b: number) => [number, number];
   readonly test_normalize: (a: number, b: number) => [number, number];

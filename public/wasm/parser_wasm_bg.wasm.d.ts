@@ -1,6 +1,10 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
+export const __wbg_logparser_free: (a: number, b: number) => void;
+export const logparser_get_result: (a: number) => any;
+export const logparser_new: () => number;
+export const logparser_process_line: (a: number, b: number, c: number) => void;
 export const parse_log: (a: number, b: number) => any;
 export const test_fingerprint: (a: number, b: number) => [number, number];
 export const test_normalize: (a: number, b: number) => [number, number];

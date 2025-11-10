@@ -1,17 +1,20 @@
 import { Shield, Lock, File } from 'lucide-react';
 import { SimpleFileUpload } from '@/components/ui/simple-file-upload';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 
 interface UploadSectionProps {
     onUpload: (file: File) => Promise<void>;
     disabled?: boolean;
+    loading?: boolean;
+    progress?: number;
 }
 
 /**
  * Initial upload section shown before any file is analyzed
  * Includes Sherlog header, upload zone, and trust badges
  */
-export function UploadSection({ onUpload, disabled = false }: UploadSectionProps) {
+export function UploadSection({ onUpload, disabled = false, loading = false, progress = 0 }: UploadSectionProps) {
     return (
         <div className="min-h-screen flex flex-col items-center justify-center space-y-8 md:space-y-10 -mt-16">
             {/* Sherlog Header - Only shown when no results */}
@@ -31,12 +34,22 @@ export function UploadSection({ onUpload, disabled = false }: UploadSectionProps
                 <div className="animate-in fade-in-0 slide-in-from-bottom-8 duration-700 delay-150 ease-out">
                     <SimpleFileUpload
                         placeholder="Drop your evidence here"
-                        maxSizeMB={100}
+                        maxSizeMB={1000}
                         accept={{ 'text/plain': ['.log', '.txt'] }}
                         onUpload={onUpload}
                         disabled={disabled}
                     />
                 </div>
+
+                {/* Progress Bar - shown during processing */}
+                {loading && progress > 0 && (
+                    <div className="space-y-2 animate-in fade-in-0 duration-300">
+                        <Progress value={progress} className="h-2" />
+                        <p className="text-center text-sm text-neutral-500 dark:text-neutral-400 font-mono">
+                            Processing: {progress}%
+                        </p>
+                    </div>
+                )}
 
                 {/* Trust Badges */}
                 <div className="flex items-center justify-center gap-6 animate-in fade-in-0 duration-700 delay-300 ease-out">
@@ -53,7 +66,7 @@ export function UploadSection({ onUpload, disabled = false }: UploadSectionProps
                 {/* Hint */}
                 <div className="flex items-center justify-center gap-2 -mt-2 animate-in fade-in-0 duration-700 delay-400 ease-out">
                     <File className="h-3.5 w-3.5 text-[#94a3b8] dark:text-neutral-500" />
-                    <p className="font-mono text-xs text-[#64748b] dark:text-neutral-400">.log, .txt • Max 100MB</p>
+                    <p className="font-mono text-xs text-[#64748b] dark:text-neutral-400">.log, .txt • Max 1GB</p>
                 </div>
             </div>
         </div>

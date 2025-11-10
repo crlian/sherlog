@@ -181,13 +181,13 @@ function handleError(f, args) {
  * @param {string} message
  * @returns {string}
  */
-export function test_normalize(message) {
+export function test_fingerprint(message) {
     let deferred2_0;
     let deferred2_1;
     try {
         const ptr0 = passStringToWasm0(message, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.test_normalize(ptr0, len0);
+        const ret = wasm.test_fingerprint(ptr0, len0);
         deferred2_0 = ret[0];
         deferred2_1 = ret[1];
         return getStringFromWasm0(ret[0], ret[1]);
@@ -211,13 +211,13 @@ export function parse_log(content) {
  * @param {string} message
  * @returns {string}
  */
-export function test_fingerprint(message) {
+export function test_normalize(message) {
     let deferred2_0;
     let deferred2_1;
     try {
         const ptr0 = passStringToWasm0(message, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.test_fingerprint(ptr0, len0);
+        const ret = wasm.test_normalize(ptr0, len0);
         deferred2_0 = ret[0];
         deferred2_1 = ret[1];
         return getStringFromWasm0(ret[0], ret[1]);
@@ -225,6 +225,57 @@ export function test_fingerprint(message) {
         wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
     }
 }
+
+const LogParserFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_logparser_free(ptr >>> 0, 1));
+/**
+ * Streaming parser that processes lines incrementally
+ * This allows processing files larger than available memory
+ */
+export class LogParser {
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        LogParserFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_logparser_free(ptr, 0);
+    }
+    /**
+     * Get the final parse results
+     * Call this after all lines have been processed
+     * @returns {any}
+     */
+    get_result() {
+        const ret = wasm.logparser_get_result(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Process a single line of log content
+     * This method is called repeatedly for each line in the file
+     * @param {string} line
+     */
+    process_line(line) {
+        const ptr0 = passStringToWasm0(line, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.logparser_process_line(this.__wbg_ptr, ptr0, len0);
+    }
+    /**
+     * Create a new parser instance
+     */
+    constructor() {
+        const ret = wasm.logparser_new();
+        this.__wbg_ptr = ret >>> 0;
+        LogParserFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+}
+if (Symbol.dispose) LogParser.prototype[Symbol.dispose] = LogParser.prototype.free;
 
 const EXPECTED_RESPONSE_TYPES = new Set(['basic', 'cors', 'default']);
 
