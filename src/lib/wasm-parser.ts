@@ -44,13 +44,17 @@ export interface ParseResult {
 export async function initWasm(): Promise<void> {
     if (!wasmInitialized) {
         try {
+            console.log("🔄 Initializing WASM parser...");
             await init();
             wasmInitialized = true;
-            console.log("✅ WASM Parser initialized");
+            console.log("✅ WASM Parser initialized successfully");
         } catch (error) {
             console.error("❌ Failed to initialize WASM:", error);
-            throw error;
+            console.error("WASM init error details:", error);
+            throw new Error(`WASM initialization failed: ${error instanceof Error ? error.message : String(error)}`);
         }
+    } else {
+        console.log("ℹ️ WASM already initialized");
     }
 }
 
@@ -66,6 +70,24 @@ export async function parseLogFile(file: File): Promise<ParseResult> {
     try {
         const content = await file.text();
         const result = parse_log(content);
+
+        // Debug logging
+        console.log('WASM parse_log result:', result);
+
+        // Validate result structure
+        if (!result) {
+            throw new Error('WASM parser returned null or undefined');
+        }
+
+        if (typeof result !== 'object') {
+            throw new Error(`WASM parser returned invalid type: ${typeof result}`);
+        }
+
+        if (!('summary' in result) || !('errors' in result)) {
+            console.error('Invalid result structure:', result);
+            throw new Error('WASM parser returned invalid structure (missing summary or errors)');
+        }
+
         return result as ParseResult;
     } catch (error) {
         console.error("Error parsing log file:", error);
@@ -80,6 +102,24 @@ export async function parseLogContent(content: string): Promise<ParseResult> {
 
     try {
         const result = parse_log(content);
+
+        // Debug logging
+        console.log('WASM parse_log result:', result);
+
+        // Validate result structure
+        if (!result) {
+            throw new Error('WASM parser returned null or undefined');
+        }
+
+        if (typeof result !== 'object') {
+            throw new Error(`WASM parser returned invalid type: ${typeof result}`);
+        }
+
+        if (!('summary' in result) || !('errors' in result)) {
+            console.error('Invalid result structure:', result);
+            throw new Error('WASM parser returned invalid structure (missing summary or errors)');
+        }
+
         return result as ParseResult;
     } catch (error) {
         console.error("Error parsing log content:", error);

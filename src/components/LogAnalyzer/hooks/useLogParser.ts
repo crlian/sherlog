@@ -30,6 +30,12 @@ export function useLogParser(): UseLogParserReturn {
 
         try {
             const parseResult = await parseLogFile(file);
+
+            // Validate result structure before using it
+            if (!parseResult || !parseResult.summary) {
+                throw new Error("Invalid parse result: missing summary data");
+            }
+
             setResult(parseResult);
 
             // Auto-focus results for accessibility
