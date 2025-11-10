@@ -34,7 +34,7 @@ export function UploadSection({ onUpload, disabled = false, loading = false, pro
                 <div className="animate-in fade-in-0 slide-in-from-bottom-8 duration-700 delay-150 ease-out">
                     <SimpleFileUpload
                         placeholder="Drop your evidence here"
-                        maxSizeMB={1000}
+                        maxSizeMB={10000}
                         accept={{ 'text/plain': ['.log', '.txt'] }}
                         onUpload={onUpload}
                         disabled={disabled}
@@ -66,7 +66,7 @@ export function UploadSection({ onUpload, disabled = false, loading = false, pro
                 {/* Hint */}
                 <div className="flex items-center justify-center gap-2 -mt-2 animate-in fade-in-0 duration-700 delay-400 ease-out">
                     <File className="h-3.5 w-3.5 text-[#94a3b8] dark:text-neutral-500" />
-                    <p className="font-mono text-xs text-[#64748b] dark:text-neutral-400">.log, .txt • Max 1GB</p>
+                    <p className="font-mono text-xs text-[#64748b] dark:text-neutral-400">.log, .txt • Max 10GB</p>
                 </div>
             </div>
         </div>

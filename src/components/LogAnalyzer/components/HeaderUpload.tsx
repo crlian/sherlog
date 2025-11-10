@@ -1,17 +1,20 @@
 import { useState, useEffect } from 'react';
 import { Upload } from 'lucide-react';
 import { SimpleFileUpload } from '@/components/ui/simple-file-upload';
+import { Progress } from '@/components/ui/progress';
 
 interface HeaderUploadProps {
     onUpload: (file: File) => Promise<void>;
     disabled?: boolean;
+    loading?: boolean;
+    progress?: number;
 }
 
 /**
  * Compact glassmorphism header that expands to show a dropzone
  * Appears in top-left when results are shown
  */
-export function HeaderUpload({ onUpload, disabled = false }: HeaderUploadProps) {
+export function HeaderUpload({ onUpload, disabled = false, loading = false, progress = 0 }: HeaderUploadProps) {
     const [headerExpanded, setHeaderExpanded] = useState(false);
     const [isFileDialogOpen, setIsFileDialogOpen] = useState(false);
 
@@ -63,10 +66,10 @@ export function HeaderUpload({ onUpload, disabled = false }: HeaderUploadProps) 
                     </div>
                 ) : (
                     // Expanded state - Compact dropzone (expands downward)
-                    <div className="bg-white/95 dark:bg-neutral-900/95 backdrop-blur-xl border border-[#e5e7eb] dark:border-white/10 rounded-xl shadow-xl p-2">
+                    <div className="bg-white/95 dark:bg-neutral-900/95 backdrop-blur-xl border border-[#e5e7eb] dark:border-white/10 rounded-xl shadow-xl p-2 space-y-2">
                         <SimpleFileUpload
                             placeholder="Drop new file here"
-                            maxSizeMB={1000}
+                            maxSizeMB={10000}
                             accept={{ 'text/plain': ['.log', '.txt'] }}
                             onUpload={handleFileUpload}
                             disabled={disabled}
@@ -74,6 +77,16 @@ export function HeaderUpload({ onUpload, disabled = false }: HeaderUploadProps) 
                             onFileDialogClose={() => setIsFileDialogOpen(false)}
                             className="[&>div]:!py-4 [&>div]:!px-3 [&>div]:!rounded-lg [&>div]:!shadow-none [&_svg]:!h-5 [&_svg]:!w-5 [&_p]:!text-xs"
                         />
+
+                        {/* Progress Bar - shown during processing */}
+                        {loading && progress > 0 && (
+                            <div className="space-y-1.5 px-1">
+                                <Progress value={progress} className="h-1.5" />
+                                <p className="text-center text-[10px] text-neutral-500 dark:text-neutral-400 font-mono">
+                                    Processing: {progress}%
+                                </p>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

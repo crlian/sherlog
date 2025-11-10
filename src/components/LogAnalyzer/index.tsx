@@ -86,6 +86,8 @@ export function LogAnalyzer() {
                 <HeaderUpload
                     onUpload={handleFileUpload}
                     disabled={loading}
+                    loading={loading}
+                    progress={progress}
                 />
             )}
 
