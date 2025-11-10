@@ -26,10 +26,7 @@ export function SummaryCard({ stats, fileName, fileSize, summaryRef }: SummaryCa
         <div className="space-y-6">
             {/* File Info Badge */}
             {fileName && (
-                <div className="flex items-center justify-between gap-3" ref={summaryRef} tabIndex={-1}>
-                    <span className="text-xs text-[#6b7280] dark:text-neutral-400">
-                        {stats.total_lines.toLocaleString()} log entries analyzed
-                    </span>
+                <div className="flex items-center justify-end" ref={summaryRef} tabIndex={-1}>
                     <Badge
                         variant="outline"
                         className="px-4 py-2 text-sm font-medium bg-white/80 dark:bg-neutral-900/80 backdrop-blur-xl border-[#e5e7eb] dark:border-white/10 shadow-sm"
