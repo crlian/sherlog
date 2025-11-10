@@ -60,10 +60,9 @@ export function useLogParser(): UseLogParserReturn {
 
             setResult(parseResult);
 
-            // Auto-focus results for accessibility
+            // Scroll to top to show results (no gap between header and content)
             setTimeout(() => {
-                summaryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                summaryRef.current?.focus();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
             }, 100);
 
             toast.success("Analysis complete", {
