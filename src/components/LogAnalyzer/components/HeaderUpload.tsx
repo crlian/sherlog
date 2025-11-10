@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Upload } from 'lucide-react';
+import { Upload, Loader2 } from 'lucide-react';
 import { SimpleFileUpload } from '@/components/ui/simple-file-upload';
 import { Progress } from '@/components/ui/progress';
 
@@ -58,34 +58,44 @@ export function HeaderUpload({ onUpload, disabled = false, loading = false, prog
                                 <h2 className="text-sm font-display font-bold text-[#111827] dark:text-white whitespace-nowrap">Sherlog</h2>
                             </div>
                             <div className="h-4 w-px bg-[#e5e7eb] dark:bg-white/10" />
-                            <div className="flex items-center gap-1.5 text-xs text-[#6b7280] dark:text-neutral-400">
-                                <Upload className="h-3.5 w-3.5" />
-                                <span className="whitespace-nowrap">New file</span>
-                            </div>
+                            {loading && progress > 0 ? (
+                                // Loading state - show spinner and progress
+                                <div className="flex items-center gap-1.5 text-xs text-[#6b7280] dark:text-neutral-400">
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    <span className="whitespace-nowrap font-mono">{progress}%</span>
+                                </div>
+                            ) : (
+                                // Idle state - show "New file"
+                                <div className="flex items-center gap-1.5 text-xs text-[#6b7280] dark:text-neutral-400">
+                                    <Upload className="h-3.5 w-3.5" />
+                                    <span className="whitespace-nowrap">New file</span>
+                                </div>
+                            )}
                         </div>
                     </div>
                 ) : (
-                    // Expanded state - Compact dropzone (expands downward)
+                    // Expanded state
                     <div className="bg-white/95 dark:bg-neutral-900/95 backdrop-blur-xl border border-[#e5e7eb] dark:border-white/10 rounded-xl shadow-xl p-2 space-y-2">
-                        <SimpleFileUpload
-                            placeholder="Drop new file here"
-                            maxSizeMB={10000}
-                            accept={{ 'text/plain': ['.log', '.txt'] }}
-                            onUpload={handleFileUpload}
-                            disabled={disabled}
-                            onFileDialogOpen={() => setIsFileDialogOpen(true)}
-                            onFileDialogClose={() => setIsFileDialogOpen(false)}
-                            className="[&>div]:!py-4 [&>div]:!px-3 [&>div]:!rounded-lg [&>div]:!shadow-none [&_svg]:!h-5 [&_svg]:!w-5 [&_p]:!text-xs"
-                        />
-
-                        {/* Progress Bar - shown during processing */}
-                        {loading && progress > 0 && (
-                            <div className="space-y-1.5 px-1">
+                        {loading && progress > 0 ? (
+                            // Loading state - show only progress bar
+                            <div className="space-y-1.5 px-2 py-4">
                                 <Progress value={progress} className="h-1.5" />
                                 <p className="text-center text-[10px] text-neutral-500 dark:text-neutral-400 font-mono">
                                     Processing: {progress}%
                                 </p>
                             </div>
+                        ) : (
+                            // Idle state - show file uploader
+                            <SimpleFileUpload
+                                placeholder="Drop new file here"
+                                maxSizeMB={10000}
+                                accept={{ 'text/plain': ['.log', '.txt'] }}
+                                onUpload={handleFileUpload}
+                                disabled={disabled}
+                                onFileDialogOpen={() => setIsFileDialogOpen(true)}
+                                onFileDialogClose={() => setIsFileDialogOpen(false)}
+                                className="[&>div]:!py-4 [&>div]:!px-3 [&>div]:!rounded-lg [&>div]:!shadow-none [&_svg]:!h-5 [&_svg]:!w-5 [&_p]:!text-xs"
+                            />
                         )}
                     </div>
                 )}
