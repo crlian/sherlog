@@ -1,8 +1,8 @@
 /* tslint:disable */
 /* eslint-disable */
-export function test_fingerprint(message: string): string;
+export function test_extract_template(message: string): any;
 export function parse_log(content: string): any;
-export function test_normalize(message: string): string;
+export function test_fingerprint(template: string): string;
 /**
  * Streaming parser that processes lines incrementally
  * This allows processing files larger than available memory
@@ -35,8 +35,8 @@ export interface InitOutput {
   readonly logparser_new: () => number;
   readonly logparser_process_line: (a: number, b: number, c: number) => void;
   readonly parse_log: (a: number, b: number) => any;
+  readonly test_extract_template: (a: number, b: number) => any;
   readonly test_fingerprint: (a: number, b: number) => [number, number];
-  readonly test_normalize: (a: number, b: number) => [number, number];
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
   readonly __wbindgen_exn_store: (a: number) => void;

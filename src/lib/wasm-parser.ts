@@ -10,11 +10,21 @@ export type ErrorType = 'error' | 'warning' | 'info';
 
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
 
+export type VariableType = 'numericid' | 'timestamp' | 'tablename' | 'ipaddress' | 'uuid' | 'path' | 'generic';
+
+export interface Variable {
+    placeholder: string;  // e.g., "{ID}", "{TIME}", "{TABLE}"
+    value: string;        // Original value from the log
+    var_type: VariableType;
+}
+
 export interface ParsedError {
     id: string;
     type: ErrorType;
     severity: Severity;
     message: string;
+    template: string;              // NEW: Normalized message with variable placeholders
+    variables: Variable[];         // NEW: List of extracted variables
     full_trace: string;
     file: string | null;
     line: number | null;

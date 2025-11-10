@@ -164,7 +164,7 @@ export function ErrorTable({ errors, onViewDetails }: ErrorTableProps) {
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="text-[#111827] dark:text-white font-medium max-w-md truncate">
-                                                {error.message}
+                                                {error.template || error.message}
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex flex-col items-end gap-1">
@@ -214,6 +214,33 @@ export function ErrorTable({ errors, onViewDetails }: ErrorTableProps) {
                                                                     </div>
                                                                 )}
                                                             </div>
+
+                                                            {/* Template & Variables (NEW) */}
+                                                            {error.variables && error.variables.length > 0 && (
+                                                                <div className="space-y-2">
+                                                                    <h4 className="text-xs font-semibold text-[#111827] dark:text-white uppercase tracking-wide">
+                                                                        Variables Found ({error.variables.length})
+                                                                    </h4>
+                                                                    <div className="bg-white dark:bg-neutral-900 border border-[#e5e7eb] dark:border-white/10 rounded-lg p-4">
+                                                                        <div className="space-y-2">
+                                                                            <div className="text-xs text-[#6b7280] dark:text-neutral-400 font-mono">
+                                                                                Template: <span className="text-[#111827] dark:text-white">{error.template}</span>
+                                                                            </div>
+                                                                            <div className="flex flex-wrap gap-2">
+                                                                                {error.variables.map((variable, idx) => (
+                                                                                    <Badge
+                                                                                        key={idx}
+                                                                                        variant="secondary"
+                                                                                        className="font-mono text-xs bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/30 text-blue-700 dark:text-blue-300"
+                                                                                    >
+                                                                                        {variable.placeholder}: {variable.value}
+                                                                                    </Badge>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            )}
 
                                                             {/* Stack Trace */}
                                                             {error.full_trace && (

@@ -32,6 +32,8 @@ pub struct ParsedError {
     pub error_type: ErrorType,
     pub severity: Severity,
     pub message: String,
+    pub template: String,              // NEW: Normalized message with variable placeholders
+    pub variables: Vec<Variable>,      // NEW: List of extracted variables
     pub full_trace: String,
     pub file: Option<String>,
     pub line: Option<u32>,
@@ -54,6 +56,27 @@ pub struct LogStats {
     pub total_warnings: usize,
     pub total_info: usize,
     pub unique_errors: usize,
+}
+
+/// Types of variables that can be extracted from log messages
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum VariableType {
+    NumericId,      // Simple numbers: 12345, 67890
+    Timestamp,      // Time formats: [16/0/15], 14:30:45
+    TableName,      // Uppercase identifiers: TO_PRODUCCIONGENERALES
+    IpAddress,      // IP addresses: 192.168.1.1
+    Uuid,           // UUIDs: 550e8400-e29b-41d4-a716-446655440000
+    Path,           // File paths or URLs: /api/users/123
+    Generic,        // Other dynamic values
+}
+
+/// A variable extracted from a log message
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Variable {
+    pub placeholder: String,  // e.g., "{ID}", "{TIME}", "{TABLE}"
+    pub value: String,        // Original value from the log
+    pub var_type: VariableType,
 }
 
 // ============================================================================
@@ -138,40 +161,62 @@ lazy_static! {
     static ref CODE_CONTEXT: Regex = Regex::new(
         r"^\s*(?:\d+\s*[|>]|>)\s*.+"
     ).unwrap();
+
+    // ============================================================================
+    // VARIABLE DETECTION PATTERNS (Ordered by specificity - most specific first)
+    // ============================================================================
+
+    // 1. Bracketed time patterns: [16/0/15], [22/0/18]
+    static ref VAR_BRACKETED_TIME: Regex = Regex::new(
+        r"\[\d+/\d+/\d+\]"
+    ).unwrap();
+
+    // 2. UUID patterns: 550e8400-e29b-41d4-a716-446655440000
+    static ref VAR_UUID: Regex = Regex::new(
+        r"\b[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\b"
+    ).unwrap();
+
+    // 3. IP addresses: 192.168.1.1, 10.0.0.1
+    static ref VAR_IP: Regex = Regex::new(
+        r"\b(?:\d{1,3}\.){3}\d{1,3}\b"
+    ).unwrap();
+
+    // 4. Table/Entity names (uppercase with underscores): TO_PRODUCCIONGENERALES, USER_ACCOUNTS
+    static ref VAR_TABLE_NAME: Regex = Regex::new(
+        r"\b[A-Z][A-Z_]{3,}\b"
+    ).unwrap();
+
+    // 5. Time patterns: 14:30:45, 14:30:45.123
+    static ref VAR_TIME: Regex = Regex::new(
+        r"\b\d{1,2}:\d{2}:\d{2}(?:\.\d{3})?\b"
+    ).unwrap();
+
+    // 6. File paths: /api/users/123, src/components/App.tsx
+    static ref VAR_PATH: Regex = Regex::new(
+        r"(?:/[\w.-]+)+/?|\b[\w-]+(?:/[\w.-]+)+\b"
+    ).unwrap();
+
+    // 7. Numeric IDs (last, least specific): 12345, 67890
+    // Only matches standalone numbers, not those inside words
+    static ref VAR_NUMERIC_ID: Regex = Regex::new(
+        r"\b\d+\b"
+    ).unwrap();
 }
 
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 
-/// Normalize error message for fingerprinting
-/// Removes numbers, timestamps, UUIDs to group similar errors
-fn normalize_message(message: &str) -> String {
-    let mut normalized = message.to_lowercase();
-
-    // Remove numbers (but keep words)
-    normalized = normalized
-        .chars()
-        .map(|c| if c.is_numeric() { 'X' } else { c })
-        .collect();
-
-    // Remove common variable parts
-    normalized = normalized.replace("uuid", "ID");
-    normalized = normalized.replace("guid", "ID");
-
-    // Remove extra whitespace
-    normalized = normalized.split_whitespace().collect::<Vec<_>>().join(" ");
-
-    normalized
-}
-
 /// Generate fingerprint for error deduplication using blake3
-fn generate_fingerprint(message: &str, file: &Option<String>, line: &Option<u32>) -> String {
-    let normalized = normalize_message(message);
+/// Uses the template (with variable placeholders) instead of raw message
+/// This ensures errors with the same pattern are grouped together
+/// Example: "User 123 not found" and "User 456 not found" both have template "User {ID} not found"
+fn generate_fingerprint(template: &str, file: &Option<String>, line: &Option<u32>) -> String {
+    // Use template directly - it already has variables normalized
     let file_part = file.as_deref().unwrap_or("");
     let line_part = line.map(|l| l.to_string()).unwrap_or_default();
 
-    let combined = format!("{}:{}:{}", normalized, file_part, line_part);
+    let combined = format!("{}:{}:{}", template.to_lowercase().trim(), file_part, line_part);
     let hash = blake3::hash(combined.as_bytes());
 
     hash.to_hex().to_string()
@@ -182,6 +227,119 @@ fn extract_timestamp(line: &str) -> Option<String> {
     TIMESTAMP.captures(line)
         .and_then(|cap| cap.get(1))
         .map(|m| m.as_str().to_string())
+}
+
+/// Extract template and variables from a message
+/// Returns (template, variables) where template has placeholders like {TIME}, {ID}, etc.
+/// and variables contains the actual values found
+fn extract_template(message: &str) -> (String, Vec<Variable>) {
+    let mut template = message.to_string();
+    let mut variables: Vec<Variable> = Vec::new();
+
+    // Pattern matching order (most specific to least specific)
+    // This is crucial: more specific patterns must be applied first
+    // to avoid generic patterns matching parts of specific patterns
+
+    // 1. Bracketed time: [16/0/15]
+    for cap in VAR_BRACKETED_TIME.captures_iter(message) {
+        if let Some(m) = cap.get(0) {
+            let value = m.as_str();
+            variables.push(Variable {
+                placeholder: "{TIME}".to_string(),
+                value: value.to_string(),
+                var_type: VariableType::Timestamp,
+            });
+            template = template.replace(value, "{TIME}");
+        }
+    }
+
+    // 2. UUIDs
+    for cap in VAR_UUID.captures_iter(message) {
+        if let Some(m) = cap.get(0) {
+            let value = m.as_str();
+            variables.push(Variable {
+                placeholder: "{UUID}".to_string(),
+                value: value.to_string(),
+                var_type: VariableType::Uuid,
+            });
+            template = template.replace(value, "{UUID}");
+        }
+    }
+
+    // 3. IP addresses
+    for cap in VAR_IP.captures_iter(message) {
+        if let Some(m) = cap.get(0) {
+            let value = m.as_str();
+            // Skip if it looks like part of a version number (e.g., "1.2.3.4" in "node v1.2.3.4")
+            // IP addresses should have values >= 0 and <= 255
+            let parts: Vec<&str> = value.split('.').collect();
+            let is_valid_ip = parts.iter().all(|p| {
+                p.parse::<u32>().map(|n| n <= 255).unwrap_or(false)
+            });
+
+            if is_valid_ip {
+                variables.push(Variable {
+                    placeholder: "{IP}".to_string(),
+                    value: value.to_string(),
+                    var_type: VariableType::IpAddress,
+                });
+                template = template.replace(value, "{IP}");
+            }
+        }
+    }
+
+    // 4. Table/Entity names (uppercase): TO_PRODUCCIONGENERALES
+    for cap in VAR_TABLE_NAME.captures_iter(message) {
+        if let Some(m) = cap.get(0) {
+            let value = m.as_str();
+            // Skip common log level keywords that we want to keep
+            if !["ERROR", "WARN", "WARNING", "INFO", "DEBUG", "TRACE", "FATAL", "CRITICAL"].contains(&value) {
+                variables.push(Variable {
+                    placeholder: "{TABLE}".to_string(),
+                    value: value.to_string(),
+                    var_type: VariableType::TableName,
+                });
+                template = template.replace(value, "{TABLE}");
+            }
+        }
+    }
+
+    // 5. Time patterns: 14:30:45
+    for cap in VAR_TIME.captures_iter(message) {
+        if let Some(m) = cap.get(0) {
+            let value = m.as_str();
+            variables.push(Variable {
+                placeholder: "{TIME}".to_string(),
+                value: value.to_string(),
+                var_type: VariableType::Timestamp,
+            });
+            template = template.replace(value, "{TIME}");
+        }
+    }
+
+    // 6. File paths: /api/users/123
+    // Skip this for now as it can be overly aggressive
+    // We can enable it later if needed
+
+    // 7. Numeric IDs (last, least specific)
+    for cap in VAR_NUMERIC_ID.captures_iter(message) {
+        if let Some(m) = cap.get(0) {
+            let value = m.as_str();
+            // Skip very small numbers (0-9) as they're likely not IDs
+            if let Ok(num) = value.parse::<u32>() {
+                if num >= 10 {
+                    variables.push(Variable {
+                        placeholder: "{ID}".to_string(),
+                        value: value.to_string(),
+                        var_type: VariableType::NumericId,
+                    });
+                    template = template.replace(value, "{ID}");
+                }
+            }
+        }
+    }
+
+    (template, variables)
 }
 
 /// Determine error type from line content
@@ -449,8 +607,12 @@ fn parse_log_content(content: &str) -> ParseResult {
             // Try to extract location from this line using any format
             let (file, line_num, column) = extract_location_any_format(line);
 
+            // Extract template and variables from message
+            let (template, variables) = extract_template(&message);
+
             let severity = determine_severity(&error_type, &message);
-            let fingerprint = generate_fingerprint(&message, &file, &line_num);
+            // Use template for fingerprinting to group similar errors
+            let fingerprint = generate_fingerprint(&template, &file, &line_num);
 
             // Update counts
             match error_type {
@@ -463,6 +625,8 @@ fn parse_log_content(content: &str) -> ParseResult {
             if let Some(existing) = error_map.get_mut(&fingerprint) {
                 // Increment occurrence count
                 existing.occurrences += 1;
+                // Add variables from this occurrence
+                existing.variables.extend(variables);
                 // Update full trace with new occurrence
                 existing.full_trace.push_str("\n\n---\n\n");
                 existing.full_trace.push_str(line);
@@ -473,6 +637,8 @@ fn parse_log_content(content: &str) -> ParseResult {
                     error_type: error_type.clone(),
                     severity,
                     message: message.clone(),
+                    template: template.clone(),
+                    variables,
                     full_trace: line.to_string(),
                     file: file.clone(),
                     line: line_num,
@@ -612,8 +778,12 @@ impl LogParser {
             // Try to extract location from this line using any format
             let (file, line_num, column) = extract_location_any_format(line);
 
+            // Extract template and variables from message
+            let (template, variables) = extract_template(&message);
+
             let severity = determine_severity(&error_type, &message);
-            let fingerprint = generate_fingerprint(&message, &file, &line_num);
+            // Use template for fingerprinting to group similar errors
+            let fingerprint = generate_fingerprint(&template, &file, &line_num);
 
             // Update counts
             match error_type {
@@ -626,6 +796,8 @@ impl LogParser {
             if let Some(existing) = self.error_map.get_mut(&fingerprint) {
                 // Increment occurrence count
                 existing.occurrences += 1;
+                // Add variables from this occurrence
+                existing.variables.extend(variables);
                 // Update full trace with new occurrence
                 existing.full_trace.push_str("\n\n---\n\n");
                 existing.full_trace.push_str(line);
@@ -636,6 +808,8 @@ impl LogParser {
                     error_type: error_type.clone(),
                     severity,
                     message: message.clone(),
+                    template: template.clone(),
+                    variables,
                     full_trace: line.to_string(),
                     file: file.clone(),
                     line: line_num,
@@ -731,11 +905,16 @@ pub fn parse_log(content: &str) -> JsValue {
 
 // For debugging - export individual functions
 #[wasm_bindgen]
-pub fn test_normalize(message: &str) -> String {
-    normalize_message(message)
+pub fn test_extract_template(message: &str) -> JsValue {
+    let (template, variables) = extract_template(message);
+    let result = serde_json::json!({
+        "template": template,
+        "variables": variables,
+    });
+    serde_wasm_bindgen::to_value(&result).unwrap()
 }
 
 #[wasm_bindgen]
-pub fn test_fingerprint(message: &str) -> String {
-    generate_fingerprint(message, &None, &None)
+pub fn test_fingerprint(template: &str) -> String {
+    generate_fingerprint(template, &None, &None)
 }
