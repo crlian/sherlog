@@ -1,4 +1,4 @@
-import init, { parse_log, test_normalize, test_fingerprint } from '../../parser-wasm/pkg/parser_wasm';
+import init, { parse_log } from '../../parser-wasm/pkg/parser_wasm';
 
 let wasmInitialized = false;
 
@@ -90,20 +90,8 @@ export async function parseLogContent(content: string): Promise<ParseResult> {
 // ============================================================================
 // UTILITY FUNCTIONS (for debugging/testing)
 // ============================================================================
-
-export async function testNormalize(message: string): Promise<string> {
-    if (!wasmInitialized) {
-        await initWasm();
-    }
-    return test_normalize(message);
-}
-
-export async function testFingerprint(message: string): Promise<string> {
-    if (!wasmInitialized) {
-        await initWasm();
-    }
-    return test_fingerprint(message);
-}
+// Note: test_normalize and test_fingerprint are not exported in production build
+// Uncomment and rebuild WASM with debug features if needed for testing
 
 // ============================================================================
 // HELPER FUNCTIONS
