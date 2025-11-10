@@ -89,6 +89,20 @@ lazy_static! {
     ).unwrap();
 
     // Generic ERROR/WARN/INFO patterns
+    // Priority 1: Detect log level at the beginning of the line (after timestamp)
+    static ref LOG_LEVEL_ERROR: Regex = Regex::new(
+        r"(?i)^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}[^\[\]]*\s+(ERROR|FATAL|CRITICAL)\b"
+    ).unwrap();
+
+    static ref LOG_LEVEL_WARN: Regex = Regex::new(
+        r"(?i)^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}[^\[\]]*\s+(WARN|WARNING)\b"
+    ).unwrap();
+
+    static ref LOG_LEVEL_INFO: Regex = Regex::new(
+        r"(?i)^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}[^\[\]]*\s+(INFO|DEBUG|TRACE)\b"
+    ).unwrap();
+
+    // Priority 2: Generic patterns (fallback for lines without timestamp)
     static ref GENERIC_ERROR: Regex = Regex::new(
         r"(?i)\b(ERROR|FATAL|CRITICAL)\b"
     ).unwrap();
@@ -171,15 +185,39 @@ fn extract_timestamp(line: &str) -> Option<String> {
 }
 
 /// Determine error type from line content
+/// Priority 1: Check log level in structured logs (e.g., "2025-05-27 00:40:12,694 INFO")
+/// Priority 2: Check for exception patterns (Node, Python, Java)
+/// Priority 3: Fallback to generic keyword matching
 fn determine_error_type(line: &str) -> ErrorType {
-    if GENERIC_ERROR.is_match(line) || NODE_ERROR.is_match(line) ||
-       PYTHON_ERROR.is_match(line) || JAVA_ERROR.is_match(line) {
-        ErrorType::Error
-    } else if GENERIC_WARN.is_match(line) {
-        ErrorType::Warning
-    } else {
-        ErrorType::Info
+    // Priority 1: Check explicit log level (prevents "INFO ... error message" from being classified as ERROR)
+    if LOG_LEVEL_ERROR.is_match(line) {
+        return ErrorType::Error;
     }
+    if LOG_LEVEL_WARN.is_match(line) {
+        return ErrorType::Warning;
+    }
+    if LOG_LEVEL_INFO.is_match(line) {
+        return ErrorType::Info;
+    }
+
+    // Priority 2: Check for exception patterns (these are actual errors even without ERROR keyword)
+    if NODE_ERROR.is_match(line) || PYTHON_ERROR.is_match(line) || JAVA_ERROR.is_match(line) {
+        return ErrorType::Error;
+    }
+
+    // Priority 3: Fallback to generic keyword matching (for logs without structured levels)
+    if GENERIC_ERROR.is_match(line) {
+        return ErrorType::Error;
+    }
+    if GENERIC_WARN.is_match(line) {
+        return ErrorType::Warning;
+    }
+    if GENERIC_INFO.is_match(line) {
+        return ErrorType::Info;
+    }
+
+    // Default: treat as info
+    ErrorType::Info
 }
 
 /// Determine severity based on error type and content
