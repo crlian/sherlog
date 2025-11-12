@@ -10,7 +10,7 @@ export type ErrorType = 'error' | 'warning' | 'info';
 
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
 
-export type VariableType = 'numericid' | 'timestamp' | 'tablename' | 'ipaddress' | 'uuid' | 'path' | 'generic';
+export type VariableType = 'numericid' | 'ipaddress' | 'uuid';
 
 export interface Variable {
     placeholder: string;  // e.g., "{ID}", "{TIME}", "{TABLE}"

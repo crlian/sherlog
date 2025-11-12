@@ -59,16 +59,13 @@ pub struct LogStats {
 }
 
 /// Types of variables that can be extracted from log messages
+/// Only includes conservative, universally-applicable patterns
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum VariableType {
-    NumericId,      // Simple numbers: 12345, 67890
-    Timestamp,      // Time formats: [16/0/15], 14:30:45
-    TableName,      // Uppercase identifiers: TO_PRODUCCIONGENERALES
-    IpAddress,      // IP addresses: 192.168.1.1
-    Uuid,           // UUIDs: 550e8400-e29b-41d4-a716-446655440000
-    Path,           // File paths or URLs: /api/users/123
-    Generic,        // Other dynamic values
+    NumericId,      // Large numbers (>= 1000): 12345, 67890
+    IpAddress,      // IPv4 addresses: 192.168.1.1
+    Uuid,           // UUIDs (RFC 4122): 550e8400-e29b-41d4-a716-446655440000
 }
 
 /// A variable extracted from a log message
@@ -163,43 +160,29 @@ lazy_static! {
     ).unwrap();
 
     // ============================================================================
-    // VARIABLE DETECTION PATTERNS (Ordered by specificity - most specific first)
+    // VARIABLE DETECTION PATTERNS (Conservative & Universal)
     // ============================================================================
+    // These patterns are designed to be universally applicable across different
+    // log formats without being overly aggressive. Only high-confidence patterns
+    // are included by default.
 
-    // 1. Bracketed time patterns: [16/0/15], [22/0/18]
-    static ref VAR_BRACKETED_TIME: Regex = Regex::new(
-        r"\[\d+/\d+/\d+\]"
-    ).unwrap();
-
-    // 2. UUID patterns: 550e8400-e29b-41d4-a716-446655440000
+    // 1. UUID patterns (RFC 4122): 550e8400-e29b-41d4-a716-446655440000
+    // Very specific and unlikely to cause false positives
     static ref VAR_UUID: Regex = Regex::new(
         r"\b[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\b"
     ).unwrap();
 
-    // 3. IP addresses: 192.168.1.1, 10.0.0.1
+    // 2. IPv4 addresses: 192.168.1.1, 10.0.0.1
+    // Validated to ensure each octet is 0-255
     static ref VAR_IP: Regex = Regex::new(
         r"\b(?:\d{1,3}\.){3}\d{1,3}\b"
     ).unwrap();
 
-    // 4. Table/Entity names (uppercase with underscores): TO_PRODUCCIONGENERALES, USER_ACCOUNTS
-    static ref VAR_TABLE_NAME: Regex = Regex::new(
-        r"\b[A-Z][A-Z_]{3,}\b"
-    ).unwrap();
-
-    // 5. Time patterns: 14:30:45, 14:30:45.123
-    static ref VAR_TIME: Regex = Regex::new(
-        r"\b\d{1,2}:\d{2}:\d{2}(?:\.\d{3})?\b"
-    ).unwrap();
-
-    // 6. File paths: /api/users/123, src/components/App.tsx
-    static ref VAR_PATH: Regex = Regex::new(
-        r"(?:/[\w.-]+)+/?|\b[\w-]+(?:/[\w.-]+)+\b"
-    ).unwrap();
-
-    // 7. Numeric IDs (last, least specific): 12345, 67890
-    // Only matches standalone numbers, not those inside words
+    // 3. Large numeric IDs (>= 1000)
+    // Conservative threshold to avoid matching things like "10 users" or "5 seconds"
+    // Only extracts numbers that are likely to be identifiers
     static ref VAR_NUMERIC_ID: Regex = Regex::new(
-        r"\b\d+\b"
+        r"\b\d{4,}\b"
     ).unwrap();
 }
 
@@ -230,30 +213,17 @@ fn extract_timestamp(line: &str) -> Option<String> {
 }
 
 /// Extract template and variables from a message
-/// Returns (template, variables) where template has placeholders like {TIME}, {ID}, etc.
-/// and variables contains the actual values found
+/// Returns (template, variables) where template has placeholders like {UUID}, {IP}, {ID}
+/// Only uses conservative, universally-applicable patterns to avoid false positives
 fn extract_template(message: &str) -> (String, Vec<Variable>) {
     let mut template = message.to_string();
     let mut variables: Vec<Variable> = Vec::new();
 
     // Pattern matching order (most specific to least specific)
-    // This is crucial: more specific patterns must be applied first
-    // to avoid generic patterns matching parts of specific patterns
+    // This ensures more specific patterns are matched before generic ones
 
-    // 1. Bracketed time: [16/0/15]
-    for cap in VAR_BRACKETED_TIME.captures_iter(message) {
-        if let Some(m) = cap.get(0) {
-            let value = m.as_str();
-            variables.push(Variable {
-                placeholder: "{TIME}".to_string(),
-                value: value.to_string(),
-                var_type: VariableType::Timestamp,
-            });
-            template = template.replace(value, "{TIME}");
-        }
-    }
-
-    // 2. UUIDs
+    // 1. UUIDs (RFC 4122)
+    // Example: 550e8400-e29b-41d4-a716-446655440000
     for cap in VAR_UUID.captures_iter(message) {
         if let Some(m) = cap.get(0) {
             let value = m.as_str();
@@ -266,14 +236,16 @@ fn extract_template(message: &str) -> (String, Vec<Variable>) {
         }
     }
 
-    // 3. IP addresses
+    // 2. IPv4 addresses
+    // Example: 192.168.1.1, 10.0.0.50
+    // Validates that each octet is 0-255
     for cap in VAR_IP.captures_iter(message) {
         if let Some(m) = cap.get(0) {
             let value = m.as_str();
-            // Skip if it looks like part of a version number (e.g., "1.2.3.4" in "node v1.2.3.4")
-            // IP addresses should have values >= 0 and <= 255
             let parts: Vec<&str> = value.split('.').collect();
-            let is_valid_ip = parts.iter().all(|p| {
+
+            // Validate IP: all octets must be 0-255
+            let is_valid_ip = parts.len() == 4 && parts.iter().all(|p| {
                 p.parse::<u32>().map(|n| n <= 255).unwrap_or(false)
             });
 
@@ -288,54 +260,18 @@ fn extract_template(message: &str) -> (String, Vec<Variable>) {
         }
     }
 
-    // 4. Table/Entity names (uppercase): TO_PRODUCCIONGENERALES
-    for cap in VAR_TABLE_NAME.captures_iter(message) {
-        if let Some(m) = cap.get(0) {
-            let value = m.as_str();
-            // Skip common log level keywords that we want to keep
-            if !["ERROR", "WARN", "WARNING", "INFO", "DEBUG", "TRACE", "FATAL", "CRITICAL"].contains(&value) {
-                variables.push(Variable {
-                    placeholder: "{TABLE}".to_string(),
-                    value: value.to_string(),
-                    var_type: VariableType::TableName,
-                });
-                template = template.replace(value, "{TABLE}");
-            }
-        }
-    }
-
-    // 5. Time patterns: 14:30:45
-    for cap in VAR_TIME.captures_iter(message) {
-        if let Some(m) = cap.get(0) {
-            let value = m.as_str();
-            variables.push(Variable {
-                placeholder: "{TIME}".to_string(),
-                value: value.to_string(),
-                var_type: VariableType::Timestamp,
-            });
-            template = template.replace(value, "{TIME}");
-        }
-    }
-
-    // 6. File paths: /api/users/123
-    // Skip this for now as it can be overly aggressive
-    // We can enable it later if needed
-
-    // 7. Numeric IDs (last, least specific)
+    // 3. Large numeric IDs (>= 1000)
+    // Example: User 12345 not found, Order 98765 failed
+    // Conservative threshold avoids matching counts like "10 users" or "5 seconds"
     for cap in VAR_NUMERIC_ID.captures_iter(message) {
         if let Some(m) = cap.get(0) {
             let value = m.as_str();
-            // Skip very small numbers (0-9) as they're likely not IDs
-            if let Ok(num) = value.parse::<u32>() {
-                if num >= 10 {
-                    variables.push(Variable {
-                        placeholder: "{ID}".to_string(),
-                        value: value.to_string(),
-                        var_type: VariableType::NumericId,
-                    });
-                    template = template.replace(value, "{ID}");
-                }
-            }
+            variables.push(Variable {
+                placeholder: "{ID}".to_string(),
+                value: value.to_string(),
+                var_type: VariableType::NumericId,
+            });
+            template = template.replace(value, "{ID}");
         }
     }
 
