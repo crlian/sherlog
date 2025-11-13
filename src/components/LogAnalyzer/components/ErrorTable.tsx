@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { XCircle, TriangleAlert, Info, Eye, TrendingUp, ChevronRight, ChevronDown, FileText, Clock, Copy, GraduationCap } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { XCircle, TriangleAlert, Info, Eye, TrendingUp, ChevronRight, ChevronDown, FileText, Clock, Copy, GraduationCap, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,8 @@ import {
     formatLocation,
 } from '@/lib/wasm-parser';
 import { PatternLearningModal } from './PatternLearningModal';
+import { clearAllPatterns, getPatterns } from '@/lib/pattern-storage';
+import { toast } from 'sonner';
 
 interface ErrorTableProps {
     errors: ParsedError[];
@@ -38,6 +40,33 @@ interface ErrorTableProps {
 export function ErrorTable({ errors, onViewDetails, onReAnalyze }: ErrorTableProps) {
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
     const [patternModalOpen, setPatternModalOpen] = useState(false);
+    const [patternsCount, setPatternsCount] = useState(0);
+
+    // Load patterns count on mount and when modal closes
+    const updatePatternsCount = () => {
+        const patterns = getPatterns();
+        setPatternsCount(patterns.length);
+    };
+
+    // Initialize count on mount
+    useEffect(() => {
+        updatePatternsCount();
+    }, []);
+
+    const handleClearPatterns = () => {
+        if (patternsCount === 0) {
+            toast.info("No patterns to clear");
+            return;
+        }
+
+        if (window.confirm(`Are you sure you want to delete all ${patternsCount} saved pattern(s)? This cannot be undone.`)) {
+            clearAllPatterns();
+            updatePatternsCount();
+            toast.success("All patterns cleared", {
+                description: "Teach new patterns to start fresh"
+            });
+        }
+    };
 
     // Calculate total occurrences for percentage calculation
     const totalOccurrences = useMemo(() =>
@@ -101,12 +130,27 @@ export function ErrorTable({ errors, onViewDetails, onReAnalyze }: ErrorTablePro
                             <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => setPatternModalOpen(true)}
+                                onClick={() => {
+                                    setPatternModalOpen(true);
+                                    updatePatternsCount(); // Refresh count when opening modal
+                                }}
                                 className="flex items-center gap-2"
                             >
                                 <GraduationCap className="h-4 w-4" />
                                 Teach Patterns
                             </Button>
+                            {patternsCount > 0 && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleClearPatterns}
+                                    className="flex items-center gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+                                    title={`Clear ${patternsCount} saved pattern(s)`}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                    Clear Patterns ({patternsCount})
+                                </Button>
+                            )}
                             <p className="text-sm text-[#6b7280] dark:text-neutral-400">
                                 Sorted by frequency
                             </p>
@@ -310,8 +354,14 @@ export function ErrorTable({ errors, onViewDetails, onReAnalyze }: ErrorTablePro
         <PatternLearningModal
             errors={errors}
             open={patternModalOpen}
-            onClose={() => setPatternModalOpen(false)}
-            onPatternSaved={onReAnalyze}
+            onClose={() => {
+                setPatternModalOpen(false);
+                updatePatternsCount(); // Update count when modal closes
+            }}
+            onPatternSaved={async () => {
+                updatePatternsCount(); // Update count when pattern is saved
+                await onReAnalyze(); // Trigger re-analysis
+            }}
         />
     </>
     );
