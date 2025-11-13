@@ -108,6 +108,7 @@ export function useLogParser(): UseLogParserReturn {
         try {
             // Load patterns from localStorage
             const patterns = getPatterns();
+            console.log(`📚 Loaded ${patterns.length} patterns from localStorage:`, patterns);
 
             if (patterns.length === 0) {
                 toast.info("No patterns found", {
@@ -124,8 +125,12 @@ export function useLogParser(): UseLogParserReturn {
                 priority: 100  // High priority
             }));
 
+            console.log('🔧 Setting custom patterns in WASM:', customPatterns);
+
             // Set custom patterns in WASM
             setCustomPatterns(customPatterns);
+
+            console.log('🔄 Re-parsing log content with custom patterns...');
 
             // Re-parse the log content
             const parseResult = await parseLogContent(logContentRef.current);

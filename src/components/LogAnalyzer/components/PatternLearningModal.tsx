@@ -35,11 +35,11 @@ export function PatternLearningModal({
 
     const { detectPattern, saveDetectedPattern, isLoading, error, clearError } = usePatternLearning();
 
-    const handleToggleError = (template: string) => {
+    const handleToggleError = (message: string) => {
         setSelectedErrors(prev =>
-            prev.includes(template)
-                ? prev.filter(e => e !== template)
-                : [...prev, template]
+            prev.includes(message)
+                ? prev.filter(e => e !== message)
+                : [...prev, message]
         );
 
         // Clear detected pattern when selection changes
@@ -51,8 +51,15 @@ export function PatternLearningModal({
             return;
         }
 
+        console.log('🔍 Detecting pattern from messages:', selectedErrors);
         const pattern = await detectPattern(selectedErrors);
+
         if (pattern) {
+            console.log('✅ Pattern detected:', {
+                template: pattern.template,
+                regex: pattern.regex,
+                confidence: pattern.confidence
+            });
             setDetectedPattern(pattern);
             // Suggest a name based on common parts
             const suggestedName = pattern.common_parts
@@ -60,6 +67,8 @@ export function PatternLearningModal({
                 .join(' ')
                 .trim() || 'Custom Pattern';
             setPatternName(suggestedName);
+        } else {
+            console.log('❌ No pattern detected');
         }
     };
 
@@ -69,6 +78,13 @@ export function PatternLearningModal({
         }
 
         try {
+            console.log('💾 Saving pattern:', {
+                name: patternName.trim(),
+                template: detectedPattern.template,
+                regex: detectedPattern.regex,
+                examples: selectedErrors
+            });
+
             saveDetectedPattern(detectedPattern, patternName.trim(), selectedErrors);
 
             // Reset state
@@ -76,8 +92,9 @@ export function PatternLearningModal({
             setDetectedPattern(null);
             setPatternName('');
 
-            // Notify parent
+            // Notify parent (triggers re-analysis)
             if (onPatternSaved) {
+                console.log('🔄 Triggering re-analysis...');
                 onPatternSaved();
             }
 
@@ -124,12 +141,12 @@ export function PatternLearningModal({
                                     <input
                                         type="checkbox"
                                         className="mt-1"
-                                        checked={selectedErrors.includes(error.template)}
-                                        onChange={() => handleToggleError(error.template)}
+                                        checked={selectedErrors.includes(error.message)}
+                                        onChange={() => handleToggleError(error.message)}
                                     />
                                     <div className="flex-1 space-y-1">
                                         <p className="font-mono text-sm text-gray-900 dark:text-gray-100">
-                                            {error.template}
+                                            {error.message}
                                         </p>
                                         <div className="flex items-center gap-2">
                                             <Badge variant="secondary" className="text-xs">
