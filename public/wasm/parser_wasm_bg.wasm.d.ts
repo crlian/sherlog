@@ -1,8 +1,21 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
+export const __wbg_logparser_free: (a: number, b: number) => void;
+export const clear_custom_patterns: () => void;
+export const cluster_errors: (a: any, b: number) => any;
+export const detect_pattern: (a: any) => any;
+export const logparser_get_result: (a: number) => any;
+export const logparser_new: () => number;
+export const logparser_process_line: (a: number, b: number, c: number) => void;
 export const parse_log: (a: number, b: number) => any;
+export const set_custom_patterns: (a: any) => void;
+export const test_extract_template: (a: number, b: number) => any;
+export const test_fingerprint: (a: number, b: number) => [number, number];
 export const __wbindgen_malloc: (a: number, b: number) => number;
 export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+export const __wbindgen_exn_store: (a: number) => void;
+export const __externref_table_alloc: () => number;
 export const __wbindgen_externrefs: WebAssembly.Table;
+export const __wbindgen_free: (a: number, b: number, c: number) => void;
 export const __wbindgen_start: () => void;
