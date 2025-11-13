@@ -1,0 +1,1 @@
+../../public/wasm/parser_wasm.d.ts
