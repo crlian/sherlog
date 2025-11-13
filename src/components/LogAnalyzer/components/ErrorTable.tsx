@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { XCircle, TriangleAlert, Info, Eye, TrendingUp, ChevronRight, ChevronDown, FileText, Clock, Copy } from 'lucide-react';
+import { XCircle, TriangleAlert, Info, Eye, TrendingUp, ChevronRight, ChevronDown, FileText, Clock, Copy, GraduationCap } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,7 @@ import {
     formatOccurrences,
     formatLocation,
 } from '@/lib/wasm-parser';
+import { PatternLearningModal } from './PatternLearningModal';
 
 interface ErrorTableProps {
     errors: ParsedError[];
@@ -35,6 +36,7 @@ interface ErrorTableProps {
  */
 export function ErrorTable({ errors, onViewDetails }: ErrorTableProps) {
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+    const [patternModalOpen, setPatternModalOpen] = useState(false);
 
     // Calculate total occurrences for percentage calculation
     const totalOccurrences = useMemo(() =>
@@ -87,17 +89,29 @@ export function ErrorTable({ errors, onViewDetails }: ErrorTableProps) {
     }
 
     return (
-        <Card className="bg-white dark:bg-neutral-900/60 border-[#e5e7eb] dark:border-white/10 shadow-md ring-1 ring-black/[0.08] dark:ring-0">
-            <CardHeader>
-                <div className="flex items-center justify-between">
-                    <CardTitle className="text-[#111827] dark:text-white text-lg font-semibold">
-                        Issues
-                    </CardTitle>
-                    <p className="text-sm text-[#6b7280] dark:text-neutral-400">
-                        Sorted by frequency
-                    </p>
-                </div>
-            </CardHeader>
+        <>
+            <Card className="bg-white dark:bg-neutral-900/60 border-[#e5e7eb] dark:border-white/10 shadow-md ring-1 ring-black/[0.08] dark:ring-0">
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <CardTitle className="text-[#111827] dark:text-white text-lg font-semibold">
+                            Issues
+                        </CardTitle>
+                        <div className="flex items-center gap-3">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setPatternModalOpen(true)}
+                                className="flex items-center gap-2"
+                            >
+                                <GraduationCap className="h-4 w-4" />
+                                Teach Patterns
+                            </Button>
+                            <p className="text-sm text-[#6b7280] dark:text-neutral-400">
+                                Sorted by frequency
+                            </p>
+                        </div>
+                    </div>
+                </CardHeader>
             <CardContent className="px-0">
                 <Table>
                     <caption className="sr-only">
@@ -290,6 +304,18 @@ export function ErrorTable({ errors, onViewDetails }: ErrorTableProps) {
                 </Table>
             </CardContent>
         </Card>
+
+        {/* Pattern Learning Modal */}
+        <PatternLearningModal
+            errors={errors}
+            open={patternModalOpen}
+            onClose={() => setPatternModalOpen(false)}
+            onPatternSaved={() => {
+                // Optionally refresh or notify user
+                console.log('Pattern saved successfully');
+            }}
+        />
+    </>
     );
 }
 

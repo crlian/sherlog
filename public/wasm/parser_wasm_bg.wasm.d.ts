@@ -2,6 +2,8 @@
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
 export const __wbg_logparser_free: (a: number, b: number) => void;
+export const cluster_errors: (a: any, b: number) => any;
+export const detect_pattern: (a: any) => any;
 export const logparser_get_result: (a: number) => any;
 export const logparser_new: () => number;
 export const logparser_process_line: (a: number, b: number, c: number) => void;

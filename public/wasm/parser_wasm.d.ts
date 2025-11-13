@@ -2,6 +2,16 @@
 /* eslint-disable */
 export function test_extract_template(message: string): any;
 export function parse_log(content: string): any;
+/**
+ * Cluster errors by similarity threshold
+ * Returns Vec<Vec<String>> of clustered errors
+ */
+export function cluster_errors(errors: any, threshold: number): any;
+/**
+ * Detect pattern from user-provided examples
+ * Returns detected pattern with template, regex, and confidence score
+ */
+export function detect_pattern(examples: any): any;
 export function test_fingerprint(template: string): string;
 /**
  * Streaming parser that processes lines incrementally
@@ -31,6 +41,8 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
   readonly __wbg_logparser_free: (a: number, b: number) => void;
+  readonly cluster_errors: (a: any, b: number) => any;
+  readonly detect_pattern: (a: any) => any;
   readonly logparser_get_result: (a: number) => any;
   readonly logparser_new: () => number;
   readonly logparser_process_line: (a: number, b: number, c: number) => void;

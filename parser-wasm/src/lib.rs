@@ -4,6 +4,9 @@ use regex::Regex;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 
+// Pattern learning module
+mod pattern_learning;
+
 // ============================================================================
 // TYPES & STRUCTS
 // ============================================================================
@@ -853,4 +856,36 @@ pub fn test_extract_template(message: &str) -> JsValue {
 #[wasm_bindgen]
 pub fn test_fingerprint(template: &str) -> String {
     generate_fingerprint(template, &None, &None)
+}
+
+// ============================================================================
+// PATTERN LEARNING (Phase 2)
+// ============================================================================
+
+/// Detect pattern from user-provided examples
+/// Returns detected pattern with template, regex, and confidence score
+#[wasm_bindgen]
+pub fn detect_pattern(examples: JsValue) -> JsValue {
+    let examples: Vec<String> = match serde_wasm_bindgen::from_value(examples) {
+        Ok(v) => v,
+        Err(_) => return JsValue::NULL,
+    };
+
+    match pattern_learning::detect_pattern_lcs(&examples) {
+        Some(pattern) => serde_wasm_bindgen::to_value(&pattern).unwrap_or(JsValue::NULL),
+        None => JsValue::NULL,
+    }
+}
+
+/// Cluster errors by similarity threshold
+/// Returns Vec<Vec<String>> of clustered errors
+#[wasm_bindgen]
+pub fn cluster_errors(errors: JsValue, threshold: f32) -> JsValue {
+    let errors: Vec<String> = match serde_wasm_bindgen::from_value(errors) {
+        Ok(v) => v,
+        Err(_) => return JsValue::NULL,
+    };
+
+    let clusters = pattern_learning::cluster_by_similarity(&errors, threshold);
+    serde_wasm_bindgen::to_value(&clusters).unwrap_or(JsValue::NULL)
 }
