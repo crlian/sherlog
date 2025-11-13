@@ -478,6 +478,9 @@ function __wbg_get_imports() {
         const ret = arg0.length;
         return ret;
     };
+    imports.wbg.__wbg_log_8cec76766b8c0e33 = function(arg0) {
+        console.log(arg0);
+    };
     imports.wbg.__wbg_new_1acc0b6eea89d040 = function() {
         const ret = new Object();
         return ret;

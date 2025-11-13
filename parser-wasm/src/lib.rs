@@ -239,12 +239,22 @@ fn extract_template(message: &str) -> (String, Vec<Variable>) {
     // Priority 1: Try custom patterns first (user-taught patterns)
     let custom_match = CUSTOM_PATTERNS.with(|patterns| {
         let patterns = patterns.borrow();
+        web_sys::console::log_1(&format!("Checking {} custom patterns for message: {}", patterns.len(), message).into());
+
         for pattern in patterns.iter() {
+            web_sys::console::log_1(&format!("  Trying regex: {}", pattern.regex).into());
+            web_sys::console::log_1(&format!("  Template: {}", pattern.template).into());
+
             if let Ok(regex) = Regex::new(&pattern.regex) {
                 if regex.is_match(message) {
                     // Found a match! Use this template
+                    web_sys::console::log_1(&format!("  ✅ MATCH! Using template: {}", pattern.template).into());
                     return Some(pattern.template.clone());
+                } else {
+                    web_sys::console::log_1(&"  ❌ No match".into());
                 }
+            } else {
+                web_sys::console::log_1(&"  ⚠️ Invalid regex".into());
             }
         }
         None

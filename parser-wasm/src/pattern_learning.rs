@@ -272,8 +272,9 @@ fn build_regex_from_template(template: &str) -> String {
     // Escape special regex characters except {VAR}
     let mut regex = regex::escape(template);
 
-    // Replace {VAR} with a non-greedy match
-    regex = regex.replace(r"\{VAR\}", ".+?");
+    // Replace {VAR} with a non-greedy match that allows zero or more characters
+    // Use .*? instead of .+? to allow empty matches
+    regex = regex.replace(r"\{VAR\}", ".*?");
 
     // Make it match the whole line
     format!("^{}$", regex)
