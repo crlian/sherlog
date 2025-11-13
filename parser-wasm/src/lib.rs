@@ -4,6 +4,9 @@ use regex::Regex;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 
+// Pattern learning module
+mod pattern_learning;
+
 // ============================================================================
 // TYPES & STRUCTS
 // ============================================================================
@@ -32,6 +35,8 @@ pub struct ParsedError {
     pub error_type: ErrorType,
     pub severity: Severity,
     pub message: String,
+    pub template: String,              // NEW: Normalized message with variable placeholders
+    pub variables: Vec<Variable>,      // NEW: List of extracted variables
     pub full_trace: String,
     pub file: Option<String>,
     pub line: Option<u32>,
@@ -54,6 +59,38 @@ pub struct LogStats {
     pub total_warnings: usize,
     pub total_info: usize,
     pub unique_errors: usize,
+}
+
+/// Types of variables that can be extracted from log messages
+/// Only includes conservative, universally-applicable patterns
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum VariableType {
+    NumericId,      // Large numbers (>= 1000): 12345, 67890
+    IpAddress,      // IPv4 addresses: 192.168.1.1
+    Uuid,           // UUIDs (RFC 4122): 550e8400-e29b-41d4-a716-446655440000
+}
+
+/// A variable extracted from a log message
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Variable {
+    pub placeholder: String,  // e.g., "{ID}", "{TIME}", "{TABLE}"
+    pub value: String,        // Original value from the log
+    pub var_type: VariableType,
+}
+
+/// Custom pattern provided by user (from localStorage)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomPattern {
+    pub regex: String,
+    pub template: String,
+    pub priority: u8,  // Higher = applied first
+}
+
+// Thread-local storage for custom patterns
+use std::cell::RefCell;
+thread_local! {
+    static CUSTOM_PATTERNS: RefCell<Vec<CustomPattern>> = RefCell::new(Vec::new());
 }
 
 // ============================================================================
@@ -89,6 +126,20 @@ lazy_static! {
     ).unwrap();
 
     // Generic ERROR/WARN/INFO patterns
+    // Priority 1: Detect log level at the beginning of the line (after timestamp)
+    static ref LOG_LEVEL_ERROR: Regex = Regex::new(
+        r"(?i)^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}[^\[\]]*\s+(ERROR|FATAL|CRITICAL)\b"
+    ).unwrap();
+
+    static ref LOG_LEVEL_WARN: Regex = Regex::new(
+        r"(?i)^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}[^\[\]]*\s+(WARN|WARNING)\b"
+    ).unwrap();
+
+    static ref LOG_LEVEL_INFO: Regex = Regex::new(
+        r"(?i)^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}[^\[\]]*\s+(INFO|DEBUG|TRACE)\b"
+    ).unwrap();
+
+    // Priority 2: Generic patterns (fallback for lines without timestamp)
     static ref GENERIC_ERROR: Regex = Regex::new(
         r"(?i)\b(ERROR|FATAL|CRITICAL)\b"
     ).unwrap();
@@ -124,40 +175,48 @@ lazy_static! {
     static ref CODE_CONTEXT: Regex = Regex::new(
         r"^\s*(?:\d+\s*[|>]|>)\s*.+"
     ).unwrap();
+
+    // ============================================================================
+    // VARIABLE DETECTION PATTERNS (Conservative & Universal)
+    // ============================================================================
+    // These patterns are designed to be universally applicable across different
+    // log formats without being overly aggressive. Only high-confidence patterns
+    // are included by default.
+
+    // 1. UUID patterns (RFC 4122): 550e8400-e29b-41d4-a716-446655440000
+    // Very specific and unlikely to cause false positives
+    static ref VAR_UUID: Regex = Regex::new(
+        r"\b[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\b"
+    ).unwrap();
+
+    // 2. IPv4 addresses: 192.168.1.1, 10.0.0.1
+    // Validated to ensure each octet is 0-255
+    static ref VAR_IP: Regex = Regex::new(
+        r"\b(?:\d{1,3}\.){3}\d{1,3}\b"
+    ).unwrap();
+
+    // 3. Large numeric IDs (>= 1000)
+    // Conservative threshold to avoid matching things like "10 users" or "5 seconds"
+    // Only extracts numbers that are likely to be identifiers
+    static ref VAR_NUMERIC_ID: Regex = Regex::new(
+        r"\b\d{4,}\b"
+    ).unwrap();
 }
 
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 
-/// Normalize error message for fingerprinting
-/// Removes numbers, timestamps, UUIDs to group similar errors
-fn normalize_message(message: &str) -> String {
-    let mut normalized = message.to_lowercase();
-
-    // Remove numbers (but keep words)
-    normalized = normalized
-        .chars()
-        .map(|c| if c.is_numeric() { 'X' } else { c })
-        .collect();
-
-    // Remove common variable parts
-    normalized = normalized.replace("uuid", "ID");
-    normalized = normalized.replace("guid", "ID");
-
-    // Remove extra whitespace
-    normalized = normalized.split_whitespace().collect::<Vec<_>>().join(" ");
-
-    normalized
-}
-
 /// Generate fingerprint for error deduplication using blake3
-fn generate_fingerprint(message: &str, file: &Option<String>, line: &Option<u32>) -> String {
-    let normalized = normalize_message(message);
+/// Uses the template (with variable placeholders) instead of raw message
+/// This ensures errors with the same pattern are grouped together
+/// Example: "User 123 not found" and "User 456 not found" both have template "User {ID} not found"
+fn generate_fingerprint(template: &str, file: &Option<String>, line: &Option<u32>) -> String {
+    // Use template directly - it already has variables normalized
     let file_part = file.as_deref().unwrap_or("");
     let line_part = line.map(|l| l.to_string()).unwrap_or_default();
 
-    let combined = format!("{}:{}:{}", normalized, file_part, line_part);
+    let combined = format!("{}:{}:{}", template.to_lowercase().trim(), file_part, line_part);
     let hash = blake3::hash(combined.as_bytes());
 
     hash.to_hex().to_string()
@@ -170,16 +229,136 @@ fn extract_timestamp(line: &str) -> Option<String> {
         .map(|m| m.as_str().to_string())
 }
 
-/// Determine error type from line content
-fn determine_error_type(line: &str) -> ErrorType {
-    if GENERIC_ERROR.is_match(line) || NODE_ERROR.is_match(line) ||
-       PYTHON_ERROR.is_match(line) || JAVA_ERROR.is_match(line) {
-        ErrorType::Error
-    } else if GENERIC_WARN.is_match(line) {
-        ErrorType::Warning
-    } else {
-        ErrorType::Info
+/// Extract template and variables from a message
+/// Returns (template, variables) where template has placeholders like {UUID}, {IP}, {ID}
+/// Priority: Custom patterns → Universal patterns
+fn extract_template(message: &str) -> (String, Vec<Variable>) {
+    let mut template = message.to_string();
+    let mut variables: Vec<Variable> = Vec::new();
+
+    // Priority 1: Try custom patterns first (user-taught patterns)
+    let custom_match = CUSTOM_PATTERNS.with(|patterns| {
+        let patterns = patterns.borrow();
+        web_sys::console::log_1(&format!("Checking {} custom patterns for message: {}", patterns.len(), message).into());
+
+        for pattern in patterns.iter() {
+            web_sys::console::log_1(&format!("  Trying regex: {}", pattern.regex).into());
+            web_sys::console::log_1(&format!("  Template: {}", pattern.template).into());
+
+            if let Ok(regex) = Regex::new(&pattern.regex) {
+                if regex.is_match(message) {
+                    // Found a match! Use this template
+                    web_sys::console::log_1(&format!("  ✅ MATCH! Using template: {}", pattern.template).into());
+                    return Some(pattern.template.clone());
+                } else {
+                    web_sys::console::log_1(&"  ❌ No match".into());
+                }
+            } else {
+                web_sys::console::log_1(&"  ⚠️ Invalid regex".into());
+            }
+        }
+        None
+    });
+
+    if let Some(custom_template) = custom_match {
+        // Custom pattern matched - use it directly
+        // Extract variables from the difference between message and template
+        return (custom_template, variables);
     }
+
+    // Priority 2: Universal patterns (UUID, IP, large IDs)
+    // Pattern matching order (most specific to least specific)
+
+    // 1. UUIDs (RFC 4122)
+    // Example: 550e8400-e29b-41d4-a716-446655440000
+    for cap in VAR_UUID.captures_iter(message) {
+        if let Some(m) = cap.get(0) {
+            let value = m.as_str();
+            variables.push(Variable {
+                placeholder: "{UUID}".to_string(),
+                value: value.to_string(),
+                var_type: VariableType::Uuid,
+            });
+            template = template.replace(value, "{UUID}");
+        }
+    }
+
+    // 2. IPv4 addresses
+    // Example: 192.168.1.1, 10.0.0.50
+    // Validates that each octet is 0-255
+    for cap in VAR_IP.captures_iter(message) {
+        if let Some(m) = cap.get(0) {
+            let value = m.as_str();
+            let parts: Vec<&str> = value.split('.').collect();
+
+            // Validate IP: all octets must be 0-255
+            let is_valid_ip = parts.len() == 4 && parts.iter().all(|p| {
+                p.parse::<u32>().map(|n| n <= 255).unwrap_or(false)
+            });
+
+            if is_valid_ip {
+                variables.push(Variable {
+                    placeholder: "{IP}".to_string(),
+                    value: value.to_string(),
+                    var_type: VariableType::IpAddress,
+                });
+                template = template.replace(value, "{IP}");
+            }
+        }
+    }
+
+    // 3. Large numeric IDs (>= 1000)
+    // Example: User 12345 not found, Order 98765 failed
+    // Conservative threshold avoids matching counts like "10 users" or "5 seconds"
+    for cap in VAR_NUMERIC_ID.captures_iter(message) {
+        if let Some(m) = cap.get(0) {
+            let value = m.as_str();
+            variables.push(Variable {
+                placeholder: "{ID}".to_string(),
+                value: value.to_string(),
+                var_type: VariableType::NumericId,
+            });
+            template = template.replace(value, "{ID}");
+        }
+    }
+
+    (template, variables)
+}
+
+/// Determine error type from line content
+/// Priority 1: Check log level in structured logs (e.g., "2025-05-27 00:40:12,694 INFO")
+/// Priority 2: Check for exception patterns (Node, Python, Java)
+/// Priority 3: Fallback to generic keyword matching
+fn determine_error_type(line: &str) -> ErrorType {
+    // Priority 1: Check explicit log level (prevents "INFO ... error message" from being classified as ERROR)
+    if LOG_LEVEL_ERROR.is_match(line) {
+        return ErrorType::Error;
+    }
+    if LOG_LEVEL_WARN.is_match(line) {
+        return ErrorType::Warning;
+    }
+    if LOG_LEVEL_INFO.is_match(line) {
+        return ErrorType::Info;
+    }
+
+    // Priority 2: Check for exception patterns (these are actual errors even without ERROR keyword)
+    if NODE_ERROR.is_match(line) || PYTHON_ERROR.is_match(line) || JAVA_ERROR.is_match(line) {
+        return ErrorType::Error;
+    }
+
+    // Priority 3: Fallback to generic keyword matching (for logs without structured levels)
+    if GENERIC_ERROR.is_match(line) {
+        return ErrorType::Error;
+    }
+    if GENERIC_WARN.is_match(line) {
+        return ErrorType::Warning;
+    }
+    if GENERIC_INFO.is_match(line) {
+        return ErrorType::Info;
+    }
+
+    // Default: treat as info
+    ErrorType::Info
 }
 
 /// Determine severity based on error type and content
@@ -411,8 +590,12 @@ fn parse_log_content(content: &str) -> ParseResult {
             // Try to extract location from this line using any format
             let (file, line_num, column) = extract_location_any_format(line);
 
+            // Extract template and variables from message
+            let (template, variables) = extract_template(&message);
+
             let severity = determine_severity(&error_type, &message);
-            let fingerprint = generate_fingerprint(&message, &file, &line_num);
+            // Use template for fingerprinting to group similar errors
+            let fingerprint = generate_fingerprint(&template, &file, &line_num);
 
             // Update counts
             match error_type {
@@ -425,6 +608,8 @@ fn parse_log_content(content: &str) -> ParseResult {
             if let Some(existing) = error_map.get_mut(&fingerprint) {
                 // Increment occurrence count
                 existing.occurrences += 1;
+                // Add variables from this occurrence
+                existing.variables.extend(variables);
                 // Update full trace with new occurrence
                 existing.full_trace.push_str("\n\n---\n\n");
                 existing.full_trace.push_str(line);
@@ -435,6 +620,8 @@ fn parse_log_content(content: &str) -> ParseResult {
                     error_type: error_type.clone(),
                     severity,
                     message: message.clone(),
+                    template: template.clone(),
+                    variables,
                     full_trace: line.to_string(),
                     file: file.clone(),
                     line: line_num,
@@ -516,7 +703,181 @@ fn parse_log_content(content: &str) -> ParseResult {
 }
 
 // ============================================================================
-// WASM EXPORTS
+// STREAMING PARSER (New - for large file support)
+// ============================================================================
+
+/// Streaming parser that processes lines incrementally
+/// This allows processing files larger than available memory
+#[wasm_bindgen]
+pub struct LogParser {
+    error_map: HashMap<String, ParsedError>,
+    total_lines: usize,
+    total_errors: usize,
+    total_warnings: usize,
+    total_info: usize,
+
+    // State for multi-line stack traces
+    in_stack_trace: bool,
+    last_error_fingerprint: Option<String>,
+    current_stack_trace: String,
+}
+
+#[wasm_bindgen]
+impl LogParser {
+    /// Create a new parser instance
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> LogParser {
+        LogParser {
+            error_map: HashMap::new(),
+            total_lines: 0,
+            total_errors: 0,
+            total_warnings: 0,
+            total_info: 0,
+            in_stack_trace: false,
+            last_error_fingerprint: None,
+            current_stack_trace: String::new(),
+        }
+    }
+
+    /// Process a single line of log content
+    /// This method is called repeatedly for each line in the file
+    #[wasm_bindgen]
+    pub fn process_line(&mut self, line: &str) {
+        self.total_lines += 1;
+
+        let error_type = determine_error_type(line);
+
+        // Check if this is an error line
+        let is_error_line = NODE_ERROR.is_match(line) ||
+                           PYTHON_ERROR.is_match(line) ||
+                           JAVA_ERROR.is_match(line) ||
+                           GENERIC_ERROR.is_match(line);
+
+        if is_error_line {
+            // Extract error details
+            let message = extract_error_message(line);
+            let timestamp = extract_timestamp(line);
+
+            // Try to extract location from this line using any format
+            let (file, line_num, column) = extract_location_any_format(line);
+
+            // Extract template and variables from message
+            let (template, variables) = extract_template(&message);
+
+            let severity = determine_severity(&error_type, &message);
+            // Use template for fingerprinting to group similar errors
+            let fingerprint = generate_fingerprint(&template, &file, &line_num);
+
+            // Update counts
+            match error_type {
+                ErrorType::Error => self.total_errors += 1,
+                ErrorType::Warning => self.total_warnings += 1,
+                ErrorType::Info => self.total_info += 1,
+            }
+
+            // Check if we've seen this error before
+            if let Some(existing) = self.error_map.get_mut(&fingerprint) {
+                // Increment occurrence count
+                existing.occurrences += 1;
+                // Add variables from this occurrence
+                existing.variables.extend(variables);
+                // Update full trace with new occurrence
+                existing.full_trace.push_str("\n\n---\n\n");
+                existing.full_trace.push_str(line);
+            } else {
+                // New error - create entry
+                let parsed_error = ParsedError {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    error_type: error_type.clone(),
+                    severity,
+                    message: message.clone(),
+                    template: template.clone(),
+                    variables,
+                    full_trace: line.to_string(),
+                    file: file.clone(),
+                    line: line_num,
+                    column,
+                    occurrences: 1,
+                    timestamp,
+                    fingerprint: fingerprint.clone(),
+                };
+
+                self.error_map.insert(fingerprint.clone(), parsed_error);
+            }
+
+            self.last_error_fingerprint = Some(fingerprint);
+            self.current_stack_trace = String::new();
+            self.in_stack_trace = true;
+        } else if self.in_stack_trace && is_stack_trace_line(line) {
+            // This is a stack trace line - append to current error's trace
+            self.current_stack_trace.push('\n');
+            self.current_stack_trace.push_str(line);
+
+            if let Some(ref fp) = self.last_error_fingerprint {
+                if let Some(error) = self.error_map.get_mut(fp) {
+                    error.full_trace.push('\n');
+                    error.full_trace.push_str(line);
+
+                    // Try to extract location if we don't have one yet
+                    if error.file.is_none() {
+                        let (file, line_num, column) = extract_location_any_format(line);
+                        if file.is_some() {
+                            error.file = file;
+                            error.line = line_num;
+                            error.column = column;
+                        }
+                    }
+                }
+            }
+        } else if self.in_stack_trace && CAUSED_BY.is_match(line) {
+            // Handle chained errors (Caused by:, Suppressed:)
+            if let Some(ref fp) = self.last_error_fingerprint {
+                if let Some(error) = self.error_map.get_mut(fp) {
+                    error.full_trace.push('\n');
+                    error.full_trace.push_str(line);
+                }
+            }
+        } else if !line.trim().is_empty() {
+            // Non-empty line that's not a stack trace - might be a warning or info
+            if GENERIC_WARN.is_match(line) {
+                self.total_warnings += 1;
+            } else if GENERIC_INFO.is_match(line) {
+                self.total_info += 1;
+            }
+            self.in_stack_trace = false;
+        }
+    }
+
+    /// Get the final parse results
+    /// Call this after all lines have been processed
+    #[wasm_bindgen]
+    pub fn get_result(&self) -> JsValue {
+        // Convert to Vec and sort by occurrences (descending)
+        let mut errors: Vec<ParsedError> = self.error_map.values().cloned().collect();
+        errors.sort_by(|a, b| b.occurrences.cmp(&a.occurrences));
+
+        let unique_errors = errors.len();
+
+        // Return top 20 only
+        errors.truncate(20);
+
+        let result = ParseResult {
+            summary: LogStats {
+                total_lines: self.total_lines,
+                total_errors: self.total_errors,
+                total_warnings: self.total_warnings,
+                total_info: self.total_info,
+                unique_errors,
+            },
+            errors,
+        };
+
+        serde_wasm_bindgen::to_value(&result).unwrap()
+    }
+}
+
+// ============================================================================
+// WASM EXPORTS (Legacy - kept for backwards compatibility)
 // ============================================================================
 
 #[wasm_bindgen]
@@ -527,11 +888,76 @@ pub fn parse_log(content: &str) -> JsValue {
 
 // For debugging - export individual functions
 #[wasm_bindgen]
-pub fn test_normalize(message: &str) -> String {
-    normalize_message(message)
+pub fn test_extract_template(message: &str) -> JsValue {
+    let (template, variables) = extract_template(message);
+    let result = serde_json::json!({
+        "template": template,
+        "variables": variables,
+    });
+    serde_wasm_bindgen::to_value(&result).unwrap()
 }
 
 #[wasm_bindgen]
-pub fn test_fingerprint(message: &str) -> String {
-    generate_fingerprint(message, &None, &None)
+pub fn test_fingerprint(template: &str) -> String {
+    generate_fingerprint(template, &None, &None)
+}
+
+// ============================================================================
+// CUSTOM PATTERNS (Phase 3)
+// ============================================================================
+
+/// Set custom patterns to be applied during parsing
+/// Patterns are applied BEFORE universal patterns (UUID, IP, ID)
+#[wasm_bindgen]
+pub fn set_custom_patterns(patterns_json: JsValue) {
+    match serde_wasm_bindgen::from_value::<Vec<CustomPattern>>(patterns_json) {
+        Ok(patterns) => {
+            CUSTOM_PATTERNS.with(|p| {
+                *p.borrow_mut() = patterns;
+            });
+        }
+        Err(e) => {
+            web_sys::console::error_1(&format!("Failed to set custom patterns: {:?}", e).into());
+        }
+    }
+}
+
+/// Clear all custom patterns
+#[wasm_bindgen]
+pub fn clear_custom_patterns() {
+    CUSTOM_PATTERNS.with(|p| {
+        p.borrow_mut().clear();
+    });
+}
+
+// ============================================================================
+// PATTERN LEARNING (Phase 2)
+// ============================================================================
+
+/// Detect pattern from user-provided examples
+/// Returns detected pattern with template, regex, and confidence score
+#[wasm_bindgen]
+pub fn detect_pattern(examples: JsValue) -> JsValue {
+    let examples: Vec<String> = match serde_wasm_bindgen::from_value(examples) {
+        Ok(v) => v,
+        Err(_) => return JsValue::NULL,
+    };
+
+    match pattern_learning::detect_pattern_lcs(&examples) {
+        Some(pattern) => serde_wasm_bindgen::to_value(&pattern).unwrap_or(JsValue::NULL),
+        None => JsValue::NULL,
+    }
+}
+
+/// Cluster errors by similarity threshold
+/// Returns Vec<Vec<String>> of clustered errors
+#[wasm_bindgen]
+pub fn cluster_errors(errors: JsValue, threshold: f32) -> JsValue {
+    let errors: Vec<String> = match serde_wasm_bindgen::from_value(errors) {
+        Ok(v) => v,
+        Err(_) => return JsValue::NULL,
+    };
+
+    let clusters = pattern_learning::cluster_by_similarity(&errors, threshold);
+    serde_wasm_bindgen::to_value(&clusters).unwrap_or(JsValue::NULL)
 }
