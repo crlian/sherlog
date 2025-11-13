@@ -28,13 +28,14 @@ import { PatternLearningModal } from './PatternLearningModal';
 interface ErrorTableProps {
     errors: ParsedError[];
     onViewDetails: (error: ParsedError) => void;
+    onReAnalyze: () => Promise<void>;
 }
 
 /**
  * Display errors in a sortable table with expandable rows
  * Shows error type, severity, message, occurrences, and expandable details
  */
-export function ErrorTable({ errors, onViewDetails }: ErrorTableProps) {
+export function ErrorTable({ errors, onViewDetails, onReAnalyze }: ErrorTableProps) {
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
     const [patternModalOpen, setPatternModalOpen] = useState(false);
 
@@ -310,10 +311,7 @@ export function ErrorTable({ errors, onViewDetails }: ErrorTableProps) {
             errors={errors}
             open={patternModalOpen}
             onClose={() => setPatternModalOpen(false)}
-            onPatternSaved={() => {
-                // Optionally refresh or notify user
-                console.log('Pattern saved successfully');
-            }}
+            onPatternSaved={onReAnalyze}
         />
     </>
     );

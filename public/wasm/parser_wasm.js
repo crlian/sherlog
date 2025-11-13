@@ -182,24 +182,13 @@ function getArrayU8FromWasm0(ptr, len) {
     return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
 }
 /**
- * @param {string} message
+ * Detect pattern from user-provided examples
+ * Returns detected pattern with template, regex, and confidence score
+ * @param {any} examples
  * @returns {any}
  */
-export function test_extract_template(message) {
-    const ptr0 = passStringToWasm0(message, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.test_extract_template(ptr0, len0);
-    return ret;
-}
-
-/**
- * @param {string} content
- * @returns {any}
- */
-export function parse_log(content) {
-    const ptr0 = passStringToWasm0(content, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.parse_log(ptr0, len0);
+export function detect_pattern(examples) {
+    const ret = wasm.detect_pattern(examples);
     return ret;
 }
 
@@ -212,17 +201,6 @@ export function parse_log(content) {
  */
 export function cluster_errors(errors, threshold) {
     const ret = wasm.cluster_errors(errors, threshold);
-    return ret;
-}
-
-/**
- * Detect pattern from user-provided examples
- * Returns detected pattern with template, regex, and confidence score
- * @param {any} examples
- * @returns {any}
- */
-export function detect_pattern(examples) {
-    const ret = wasm.detect_pattern(examples);
     return ret;
 }
 
@@ -243,6 +221,44 @@ export function test_fingerprint(template) {
     } finally {
         wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
     }
+}
+
+/**
+ * Clear all custom patterns
+ */
+export function clear_custom_patterns() {
+    wasm.clear_custom_patterns();
+}
+
+/**
+ * Set custom patterns to be applied during parsing
+ * Patterns are applied BEFORE universal patterns (UUID, IP, ID)
+ * @param {any} patterns_json
+ */
+export function set_custom_patterns(patterns_json) {
+    wasm.set_custom_patterns(patterns_json);
+}
+
+/**
+ * @param {string} message
+ * @returns {any}
+ */
+export function test_extract_template(message) {
+    const ptr0 = passStringToWasm0(message, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.test_extract_template(ptr0, len0);
+    return ret;
+}
+
+/**
+ * @param {string} content
+ * @returns {any}
+ */
+export function parse_log(content) {
+    const ptr0 = passStringToWasm0(content, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.parse_log(ptr0, len0);
+    return ret;
 }
 
 const LogParserFinalization = (typeof FinalizationRegistry === 'undefined')
@@ -338,6 +354,10 @@ function __wbg_get_imports() {
         const ret = Error(getStringFromWasm0(arg0, arg1));
         return ret;
     };
+    imports.wbg.__wbg_Number_bb48ca12f395cd08 = function(arg0) {
+        const ret = Number(arg0);
+        return ret;
+    };
     imports.wbg.__wbg___wbindgen_boolean_get_6d5a1ee65bab5f68 = function(arg0) {
         const v = arg0;
         const ret = typeof(v) === 'boolean' ? v : undefined;
@@ -350,6 +370,10 @@ function __wbg_get_imports() {
         getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
         getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
     };
+    imports.wbg.__wbg___wbindgen_in_bb933bd9e1b3bc0f = function(arg0, arg1) {
+        const ret = arg0 in arg1;
+        return ret;
+    };
     imports.wbg.__wbg___wbindgen_is_function_ee8a6c5833c90377 = function(arg0) {
         const ret = typeof(arg0) === 'function';
         return ret;
@@ -361,6 +385,10 @@ function __wbg_get_imports() {
     };
     imports.wbg.__wbg___wbindgen_is_string_fbb76cb2940daafd = function(arg0) {
         const ret = typeof(arg0) === 'string';
+        return ret;
+    };
+    imports.wbg.__wbg___wbindgen_is_undefined_2d472862bd29a478 = function(arg0) {
+        const ret = arg0 === undefined;
         return ret;
     };
     imports.wbg.__wbg___wbindgen_jsval_loose_eq_b664b38a2f582147 = function(arg0, arg1) {
@@ -392,6 +420,9 @@ function __wbg_get_imports() {
         const ret = arg0.done;
         return ret;
     };
+    imports.wbg.__wbg_error_a7f8fbb0523dae15 = function(arg0) {
+        console.error(arg0);
+    };
     imports.wbg.__wbg_getRandomValues_38a1ff1ea09f6cc7 = function() { return handleError(function (arg0, arg1) {
         globalThis.crypto.getRandomValues(getArrayU8FromWasm0(arg0, arg1));
     }, arguments) };
@@ -403,6 +434,10 @@ function __wbg_get_imports() {
         const ret = Reflect.get(arg0, arg1);
         return ret;
     }, arguments) };
+    imports.wbg.__wbg_get_with_ref_key_1dc361bd10053bfe = function(arg0, arg1) {
+        const ret = arg0[arg1];
+        return ret;
+    };
     imports.wbg.__wbg_instanceof_ArrayBuffer_70beb1189ca63b38 = function(arg0) {
         let result;
         try {
@@ -425,6 +460,10 @@ function __wbg_get_imports() {
     };
     imports.wbg.__wbg_isArray_96e0af9891d0945d = function(arg0) {
         const ret = Array.isArray(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_isSafeInteger_d216eda7911dde36 = function(arg0) {
+        const ret = Number.isSafeInteger(arg0);
         return ret;
     };
     imports.wbg.__wbg_iterator_e5822695327a3c39 = function() {

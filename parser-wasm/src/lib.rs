@@ -79,6 +79,20 @@ pub struct Variable {
     pub var_type: VariableType,
 }
 
+/// Custom pattern provided by user (from localStorage)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomPattern {
+    pub regex: String,
+    pub template: String,
+    pub priority: u8,  // Higher = applied first
+}
+
+// Thread-local storage for custom patterns
+use std::cell::RefCell;
+thread_local! {
+    static CUSTOM_PATTERNS: RefCell<Vec<CustomPattern>> = RefCell::new(Vec::new());
+}
+
 // ============================================================================
 // REGEX PATTERNS (Multi-Language Support)
 // ============================================================================
@@ -217,13 +231,33 @@ fn extract_timestamp(line: &str) -> Option<String> {
 
 /// Extract template and variables from a message
 /// Returns (template, variables) where template has placeholders like {UUID}, {IP}, {ID}
-/// Only uses conservative, universally-applicable patterns to avoid false positives
+/// Priority: Custom patterns → Universal patterns
 fn extract_template(message: &str) -> (String, Vec<Variable>) {
     let mut template = message.to_string();
     let mut variables: Vec<Variable> = Vec::new();
 
+    // Priority 1: Try custom patterns first (user-taught patterns)
+    let custom_match = CUSTOM_PATTERNS.with(|patterns| {
+        let patterns = patterns.borrow();
+        for pattern in patterns.iter() {
+            if let Ok(regex) = Regex::new(&pattern.regex) {
+                if regex.is_match(message) {
+                    // Found a match! Use this template
+                    return Some(pattern.template.clone());
+                }
+            }
+        }
+        None
+    });
+
+    if let Some(custom_template) = custom_match {
+        // Custom pattern matched - use it directly
+        // Extract variables from the difference between message and template
+        return (custom_template, variables);
+    }
+
+    // Priority 2: Universal patterns (UUID, IP, large IDs)
     // Pattern matching order (most specific to least specific)
-    // This ensures more specific patterns are matched before generic ones
 
     // 1. UUIDs (RFC 4122)
     // Example: 550e8400-e29b-41d4-a716-446655440000
@@ -856,6 +890,34 @@ pub fn test_extract_template(message: &str) -> JsValue {
 #[wasm_bindgen]
 pub fn test_fingerprint(template: &str) -> String {
     generate_fingerprint(template, &None, &None)
+}
+
+// ============================================================================
+// CUSTOM PATTERNS (Phase 3)
+// ============================================================================
+
+/// Set custom patterns to be applied during parsing
+/// Patterns are applied BEFORE universal patterns (UUID, IP, ID)
+#[wasm_bindgen]
+pub fn set_custom_patterns(patterns_json: JsValue) {
+    match serde_wasm_bindgen::from_value::<Vec<CustomPattern>>(patterns_json) {
+        Ok(patterns) => {
+            CUSTOM_PATTERNS.with(|p| {
+                *p.borrow_mut() = patterns;
+            });
+        }
+        Err(e) => {
+            web_sys::console::error_1(&format!("Failed to set custom patterns: {:?}", e).into());
+        }
+    }
+}
+
+/// Clear all custom patterns
+#[wasm_bindgen]
+pub fn clear_custom_patterns() {
+    CUSTOM_PATTERNS.with(|p| {
+        p.borrow_mut().clear();
+    });
 }
 
 // ============================================================================

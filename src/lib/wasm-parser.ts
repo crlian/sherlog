@@ -1,6 +1,21 @@
-import init, { parse_log } from '../../parser-wasm/pkg/parser_wasm';
+import init, { parse_log, set_custom_patterns as wasmSetCustomPatterns, clear_custom_patterns as wasmClearCustomPatterns } from '../../parser-wasm/pkg/parser_wasm';
 
 let wasmInitialized = false;
+
+// ============================================================================
+// CUSTOM PATTERN MANAGEMENT
+// ============================================================================
+
+/**
+ * Set custom patterns to be applied during log parsing
+ * Custom patterns have priority over universal patterns
+ */
+export const setCustomPatterns = wasmSetCustomPatterns;
+
+/**
+ * Clear all custom patterns
+ */
+export const clearCustomPatterns = wasmClearCustomPatterns;
 
 // ============================================================================
 // TYPE DEFINITIONS (matching Rust structs)

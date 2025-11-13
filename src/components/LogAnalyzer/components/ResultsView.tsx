@@ -13,6 +13,7 @@ interface ResultsViewProps {
     summaryRef: React.RefObject<HTMLDivElement>;
     onViewDetails: (error: ParsedError) => void;
     onNewUpload: () => void;
+    onReAnalyze: () => Promise<void>;
 }
 
 /**
@@ -26,6 +27,7 @@ export function ResultsView({
     summaryRef,
     onViewDetails,
     onNewUpload,
+    onReAnalyze,
 }: ResultsViewProps) {
     return (
         <div className="pt-20 pb-16 space-y-6 max-w-7xl mx-auto px-8 animate-in fade-in-0 duration-500">
@@ -62,6 +64,7 @@ export function ResultsView({
                 <ErrorTable
                     errors={result.errors}
                     onViewDetails={onViewDetails}
+                    onReAnalyze={onReAnalyze}
                 />
             ) : (
                 // No Errors Found

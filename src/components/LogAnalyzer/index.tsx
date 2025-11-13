@@ -26,6 +26,7 @@ export function LogAnalyzer() {
         progress,
         summaryRef,
         handleFileUpload,
+        reAnalyzeWithPatterns,
         resetAnalysis,
     } = useLogParser();
 
@@ -109,6 +110,7 @@ export function LogAnalyzer() {
                     summaryRef={summaryRef}
                     onViewDetails={handleViewDetails}
                     onNewUpload={resetAnalysis}
+                    onReAnalyze={reAnalyzeWithPatterns}
                 />
             )}
 
